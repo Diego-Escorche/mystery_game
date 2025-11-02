@@ -1,0 +1,9 @@
+# Núcleo del juego (CLI)
+PyYAML>=6.0
+
+# LLM HuggingFace (SmolLM3-3B)
+transformers>=4.44.0
+torch>=2.1.0
+accelerate>=0.29.0
+safetensors>=0.4.3
+sentencepiece>=0.2.0

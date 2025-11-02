@@ -1,0 +1,60 @@
+Silvana:
+  COARTADA:
+    [
+      "Estaba practicando en la cuerda a pocos metros de la carpa principal alrededor de las 22:10.",
+    ]
+  PRUEBAS:
+    [
+      "Notó fibras cortadas en su cuerda de funambulista dos días antes del incidente.",
+    ]
+  RELACIONES: ["Desconfía de Jack por su temperamento con los animales."]
+  RUMOR: ["Escuchó a Bombita decir que Canelitas quería irse del circo."]
+
+Madame Seraphine:
+  COARTADA:
+    [
+      "Estaba en su vagón arreglando cartas del tarot cuando oyó el vidrio romperse.",
+    ]
+  PRUEBAS:
+    ["Vio restos de pintura roja cerca del telón trasero después del acto."]
+  RELACIONES: ["Simpatiza con Lysandra, le presta vestuario a veces."]
+  RUMOR: ["Asegura que algunos símbolos pintados no son parte del show."]
+
+Grigori:
+  COARTADA:
+    ["Ayudaba a desmontar pesas tras el número, cerca del almacén de utilería."]
+  PRUEBAS: ["Notó arena húmeda formando un rastro hacia los vagones."]
+  RELACIONES: ["Protege a Silvana; no tolera abusos de Jack."]
+  RUMOR: ["Dice que Canelitas discutió con alguien del staff dos noches atrás."]
+
+Lysandra:
+  COARTADA:
+    [
+      "Hacía estiramientos detrás de bambalinas cuando escuchó un golpe y risas lejanas.",
+    ]
+  PRUEBAS: ["Vio un pañuelo con pintura roja detrás del escenario."]
+  RELACIONES: ["A veces cubre a Bombita si llega tarde."]
+  RUMOR: ["Cree que Madame Seraphine sabe más de los símbolos."]
+
+Jack:
+  COARTADA:
+    ["Estaba guardando jaulas y chicotes en el vagón, lejos del camarín."]
+  PRUEBAS: ["Dice que el espejo ya tenía una grieta vieja, no era nuevo."]
+  RELACIONES: ["Piensa que Canelitas era un problema porque quería irse."]
+  RUMOR: ["Asegura que Grigori defiende demasiado a Silvana por algo."]
+
+Mefisto (Bombita):
+  COARTADA:
+    ["Se cambiaba de maquillaje en otro camerino cuando escuchó el estruendo."]
+  PRUEBAS: ["Afirma haber visto una sombra salir del camarín de Canelitas."]
+  RELACIONES: ["Apreciaba a Canelitas, lo veía como un hermano cansado."]
+  RUMOR: ["Oyó que la cuerda de Silvana estaba 'tocada'."]
+
+Canelitas:
+  COARTADA:
+    [
+      "Últimos días se lo veía cabizbajo, guardándose hasta tarde en el camarín.",
+    ]
+  PRUEBAS: ["Guardaba notas con símbolos que decía haber copiado de un ritual."]
+  RELACIONES: ["Tenía roces con Jack por los horarios y el liderazgo."]
+  RUMOR: ["Pensaba abandonar el circo y contarlo todo."]

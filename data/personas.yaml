@@ -1,0 +1,77 @@
+silvana_funambula:
+  name: "Silvana"
+  role: "Funámbula"
+  personality_key: "silvana_funambula"
+  relations:
+    Grigori: 0.2
+    Lysandra: -0.1
+    "Madame Seraphine": 0.1
+    Jack: -0.2
+    "Mefisto (Bombita)": -0.1
+    Canelitas: 0.3
+madame_seraphine:
+  name: "Madame Seraphine"
+  role: "Ilusionista"
+  personality_key: "madame_seraphine"
+  relations:
+    Silvana: 0.1
+    Grigori: -0.1
+    Lysandra: 0.2
+    Jack: -0.1
+    "Mefisto (Bombita)": 0.0
+    Canelitas: 0.2
+grigori_fuerte:
+  name: "Grigori"
+  role: "Hombre fuerte"
+  personality_key: "grigori_fuerte"
+  relations:
+    Silvana: 0.2
+    Lysandra: 0.0
+    "Madame Seraphine": -0.1
+    Jack: -0.2
+    "Mefisto (Bombita)": 0.1
+    Canelitas: 0.1
+lysandra_contorsionista:
+  name: "Lysandra"
+  role: "Contorsionista"
+  personality_key: "lysandra_contorsionista"
+  relations:
+    Silvana: -0.1
+    Grigori: 0.0
+    "Madame Seraphine": 0.2
+    Jack: 0.0
+    "Mefisto (Bombita)": 0.1
+    Canelitas: 0.1
+jack_domador:
+  name: "Jack"
+  role: "Domador"
+  personality_key: "jack_domador"
+  relations:
+    Silvana: -0.2
+    Grigori: -0.1
+    Lysandra: 0.0
+    "Madame Seraphine": -0.1
+    "Mefisto (Bombita)": 0.1
+    Canelitas: -0.1
+mefisto_bombita:
+  name: "Mefisto (Bombita)"
+  role: "Payaso"
+  personality_key: "mefisto_bombita"
+  relations:
+    Silvana: -0.1
+    Grigori: 0.1
+    Lysandra: 0.1
+    "Madame Seraphine": 0.0
+    Jack: 0.1
+    Canelitas: 0.2
+canelitas:
+  name: "Canelitas"
+  role: "Payaso principal"
+  personality_key: "canelitas"
+  relations:
+    Silvana: 0.3
+    Grigori: 0.1
+    Lysandra: 0.1
+    "Madame Seraphine": 0.2
+    Jack: -0.2
+    "Mefisto (Bombita)": 0.2
