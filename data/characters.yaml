@@ -13,6 +13,7 @@ silvana_funambula:
 madame_seraphine:
   name: "Madame Seraphine"
   role: "Ilusionista"
+  aliases: ["Madame", "Seraphine"]
   personality_key: "madame_seraphine"
   relations:
     Silvana: 0.1
@@ -61,6 +62,7 @@ jack_domador:
 mefisto_bombita:
   name: "Mefisto (Bombita)"
   role: "Payaso"
+  aliases: ["Bombita"]
   personality_key: "mefisto_bombita"
   relations:
     Silvana: -0.1
@@ -73,6 +75,7 @@ mefisto_bombita:
 ñopin_desfijo:
   name: "Ñopin Desfijo"
   role: "Payaso principal"
+  aliases: ["Ñopin"]
   personality_key: "ñopin_desfijo"
   relations:
     Silvana: 0.3

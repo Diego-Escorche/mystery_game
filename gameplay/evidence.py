@@ -34,17 +34,6 @@ def seed_evidence(gs: GameState, seed: Optional[int] = None) -> None:
     gs.knowledge_tracker.setdefault("_evidence_pool", {})
     gs.knowledge_tracker["_evidence_pool"]["items"] = pool
 
-def reveal_next(gs: GameState) -> str:
-    """
-    Compatibilidad: revela el siguiente del pool mixto (real o ambiguo).
-    """
-    pool = gs.knowledge_tracker.get("_evidence_pool", {}).get("items", [])
-    if not pool:
-        return ""
-    item = pool.pop(0)
-    gs.evidence_revealed.append(item)
-    return item
-
 def reveal_random_real(gs: GameState, seed: Optional[int] = None) -> str:
     """
     Revela UNA evidencia REAL aleatoria que aún no haya sido revelada.

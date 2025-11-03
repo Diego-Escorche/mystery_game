@@ -1,7 +1,18 @@
-from enum import Enum, auto
+# engine/state.py
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Set
-from collections import deque
+from enum import Enum, auto
+from typing import Dict, List, Optional, Set, Any
+import re
+import unicodedata
+
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+def _norm(s: str) -> str:
+    return _strip_accents(s.lower().strip())
+
+def _norm_tokens(s: str) -> List[str]:
+    return [t for t in re.split(r"\s+|_", _norm(s)) if t]
 
 class Phase(Enum):
     INICIO = auto()
@@ -9,105 +20,169 @@ class Phase(Enum):
     CONCLUSION = auto()
 
 @dataclass
-class StatementEvent:
-    speaker: str
-    target: Optional[str]
-    content: str
-    is_accusation: bool = False
-    is_support: bool = False
-    timestamp: float = 0.0
-
-@dataclass
 class CharacterMemory:
-    """Memoria persistente por personaje para coherencia multi-ronda."""
-    last_questions: deque = field(default_factory=lambda: deque(maxlen=5))
-    last_answers: deque = field(default_factory=lambda: deque(maxlen=5))
-    told_facts: Dict[str, Set[str]] = field(default_factory=dict)
     accused_by: Set[str] = field(default_factory=set)
     supported_by: Set[str] = field(default_factory=set)
-    accused_others: Set[str] = field(default_factory=set)
-    supported_others: Set[str] = field(default_factory=set)
     evasion_count: int = 0
-
-    def remember_fact(self, intent: str, text: str) -> None:
-        b = self.told_facts.setdefault(intent, set())
-        b.add(text)
-
-    def remember_qa(self, q: str, a: str) -> None:
-        self.last_questions.append(q)
-        self.last_answers.append(a)
-
-    def mark_accused_by(self, name: str) -> None:
-        self.accused_by.add(name)
-
-    def mark_supported_by(self, name: str) -> None:
-        self.supported_by.add(name)
-
-    def mark_accused_other(self, name: str) -> None:
-        self.accused_others.add(name)
-
-    def mark_supported_other(self, name: str) -> None:
-        self.supported_others.add(name)
-
-    def increment_evasion(self) -> None:
-        self.evasion_count += 1
+    told_facts: Dict[str, Set[str]] = field(default_factory=lambda: {})
 
 @dataclass
 class GameState:
-    phase: Phase = Phase.INICIO
-    suspects: List[str] = field(default_factory=list)
-    victim: str = "Ñopin Desfijo"
+    suspects: List[str]
+    victim: str
     killer: Optional[str] = None
-    question_limits: Dict[str, int] = field(default_factory=dict)
-    question_limit_per_phase: int = 3
-    statements_log: List[StatementEvent] = field(default_factory=list)
+    phase: Phase = Phase.INICIO
+
+    relations: Dict[str, Dict[str, float]] = field(default_factory=lambda: {})
+    per_character_memory: Dict[str, CharacterMemory] = field(default_factory=lambda: {})
+
     evidence_revealed: List[str] = field(default_factory=list)
-    # NUEVO: quién aportó cada evidencia (texto exacto → nombre del personaje)
     evidence_sources: Dict[str, str] = field(default_factory=dict)
-    knowledge_tracker: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    relationship_matrix: Dict[Tuple[str, str], float] = field(default_factory=dict)
-    rng_seed: Optional[int] = None
 
-    # Memoria por personaje
-    per_character_memory: Dict[str, CharacterMemory] = field(default_factory=dict)
+    question_limits: Dict[str, int] = field(default_factory=dict)
 
-    def set_phase(self, new_phase: Phase) -> None:
-        self.phase = new_phase
+    alias_index: Dict[str, str] = field(default_factory=dict)
 
-    def record_statement(self, event: StatementEvent) -> None:
-        self.statements_log.append(event)
+    knowledge_tracker: Dict[str, Any] = field(default_factory=dict)
 
-    def adjust_relationship(self, a: str, b: str, delta: float) -> None:
-        key = (a, b)
-        cur = self.relationship_matrix.get(key, 0.0)
-        self.relationship_matrix[key] = max(-1.0, min(1.0, cur + delta))
+    # ---------- Fase ----------
+    def set_phase(self, p: Phase):
+        self.phase = p
 
-    def get_relationship(self, a: str, b: str) -> float:
-        return self.relationship_matrix.get((a, b), 0.0)
+    # ---------- Relaciones ----------
+    def get_relationship(self, a: str, b: Optional[str]) -> float:
+        if not b or a not in self.relations:
+            return 0.0
+        return float(self.relations.get(a, {}).get(b, 0.0))
 
-    # ====== Helpers de memoria ======
-    def mem(self, name: str) -> CharacterMemory:
-        if name not in self.per_character_memory:
-            self.per_character_memory[name] = CharacterMemory()
-        return self.per_character_memory[name]
+    # ---------- Memoria ----------
+    def remember_qa(self, name: str, intent: str, payload: str):
+        _ = self.per_character_memory.setdefault(name, CharacterMemory())
 
-    def remember_qa(self, name: str, question: str, answer: str) -> None:
-        self.mem(name).remember_qa(question, answer)
+    def remember_fact(self, name: str, intent: str, payload: str):
+        mem = self.per_character_memory.setdefault(name, CharacterMemory())
+        bucket = mem.told_facts.setdefault(intent, set())
+        bucket.add(payload)
 
-    def remember_fact(self, name: str, intent: str, fact_text: str) -> None:
-        self.mem(name).remember_fact(intent, fact_text)
+    def increment_evasion(self, name: str):
+        mem = self.per_character_memory.setdefault(name, CharacterMemory())
+        mem.evasion_count += 1
 
-    def mark_accusation(self, target: str, source: str) -> None:
-        self.mem(target).mark_accused_by(source)
+    # ---------- Alias / Canónicos ----------
+    def build_alias_index(self, characters: Dict[str, Any]):
+        idx: Dict[str, str] = {}
+        for canonical, data in characters.items():
+            base = _norm(canonical)
+            idx[base] = canonical
+            # tokens individuales (incluye separar por guiones bajos)
+            for token in _norm_tokens(canonical):
+                idx[token] = canonical
+            # alias declarados
+            for alias in data.get("aliases", []) or []:
+                a = _norm(alias)
+                idx[a] = canonical
+                for token in _norm_tokens(alias):
+                    idx[token] = canonical
+            # versión “sin guión bajo” como alias
+            if "_" in canonical:
+                idx[_norm(canonical.replace("_", " "))] = canonical
 
-    def mark_support(self, target: str, source: str) -> None:
-        self.mem(target).mark_supported_by(source)
+        # alias manuales útiles
+        manual = {
+            "ñopin": "Ñopin desfijo",
+            "ñopin desfijo": "Ñopin desfijo",
+            "bombita": "Mefisto",
+            "mefisto": "Mefisto",
+            "madame": "Madame Seraphine",
+            "seraphine": "Madame Seraphine",
+        }
+        for k, v in manual.items():
+            idx[_norm(k)] = v
 
-    def mark_character_accused_other(self, speaker: str, other: str) -> None:
-        self.mem(speaker).mark_accused_other(other)
+        self.alias_index = idx
 
-    def mark_character_supported_other(self, speaker: str, other: str) -> None:
-        self.mem(speaker).mark_supported_other(other)
+    def resolve_alias(self, text: str) -> Optional[str]:
+        if not self.alias_index:
+            return None
+        norm_txt = _norm(text)
+        # 1) match exacto
+        if norm_txt in self.alias_index:
+            return self.alias_index[norm_txt]
+        # 2) búsqueda por token como palabra completa
+        keys = sorted(self.alias_index.keys(), key=len, reverse=True)
+        for k in keys:
+            pattern = r"(?<!\w)" + re.escape(k) + r"(?!\w)"
+            if re.search(pattern, norm_txt):
+                return self.alias_index[k]
+        return None
 
-    def increment_evasion(self, name: str) -> None:
-        self.mem(name).increment_evasion()
+    def canonicalize_name(self, name: str) -> Optional[str]:
+        if not name:
+            return None
+        # exacto
+        if name in self.suspects:
+            return name
+        # por alias
+        resolved = self.resolve_alias(name)
+        if resolved and resolved in self.suspects:
+            return resolved
+        # exacto normalizado
+        n = _norm(name)
+        for s in self.suspects:
+            if _norm(s) == n:
+                return s
+        # match por tokens (ej. "jack" -> "jack_domador")
+        n_tokens = set(_norm_tokens(name))
+        best = None
+        best_score = 0
+        for s in self.suspects:
+            s_tokens = set(_norm_tokens(s))
+            score = len(n_tokens & s_tokens)
+            if score > best_score:
+                best_score = score
+                best = s
+        if best and best_score > 0:
+            return best
+        return None
+
+    # ---------- Relaciones desde YAML ----------
+    def ingest_yaml_relations(self, characters: Dict[str, Any], symmetric: bool = False, sym_blend: float = 0.5):
+        self.relations = self.relations or {}
+        for a_name in self.suspects:
+            self.relations.setdefault(a_name, {})
+
+        for a_name, data in characters.items():
+            if a_name not in self.suspects:
+                continue
+            relmap = data.get("relations") or {}
+            if not isinstance(relmap, dict):
+                continue
+            for b_raw, score in relmap.items():
+                b_name = self.canonicalize_name(b_raw)
+                if not b_name or b_name == a_name:
+                    continue
+                try:
+                    val = max(-1.0, min(1.0, float(score)))
+                except Exception:
+                    continue
+                self.relations.setdefault(a_name, {})[b_name] = val
+
+        if not symmetric:
+            return
+
+        for a in self.suspects:
+            for b in self.suspects:
+                if a == b:
+                    continue
+                av = self.relations.get(a, {}).get(b, None)
+                bv = self.relations.get(b, {}).get(a, None)
+                if av is None and bv is None:
+                    continue
+                if av is None:
+                    self.relations.setdefault(a, {})[b] = float(bv) * sym_blend
+                elif bv is None:
+                    self.relations.setdefault(b, {})[a] = float(av) * sym_blend
+                else:
+                    m = (float(av) * (1.0 - sym_blend) + float(bv) * sym_blend)
+                    self.relations[a][b] = max(-1.0, min(1.0, m))
+                    self.relations[b][a] = max(-1.0, min(1.0, m))
