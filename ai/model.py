@@ -1,3 +1,4 @@
+# ai/model.py
 import random
 from typing import Dict, Any, Optional, Tuple
 from .guardrails import is_offtopic, enforce_focus, classify_intent
@@ -64,40 +65,31 @@ INTENT_LIE_WEIGHTS_INNOCENT = {
     "LUGAR": 0.0, "OBJETO": 0.0, "RUMOR": 0.0, "GENERAL": 0.0,
 }
 
-
 # =========================
 # Ayudas de selección factual
 # =========================
 
 def _pick_factual(character: Dict[str, Any], intent: str) -> Optional[str]:
-    """
-    Toma un hecho del conocimiento del personaje para el intent dado.
-    """
     kn = character.get("knowledge", {})
-    # soporta claves en distintos casos
     bucket = kn.get(intent) or kn.get(intent.capitalize())
     if isinstance(bucket, list) and bucket:
         return random.choice(bucket)
     return None
 
 def _soften(text: str) -> str:
-    """
-    Suaviza/hedgea una afirmación para que suene menos comprometida.
-    """
     if not text:
         return "No estoy totalmente seguro."
     t = text[0].lower() + text[1:] if text and text[0].isupper() else text
     return f"{random.choice(HEDGE_PREFIXES)} {t}"
 
-
 # =========================
-# Lógica principal del stub
+# Lógica principal del stub (diálogo)
 # =========================
 
 class AIModelAdapter:
     """
     Stub generativo: produce respuestas dinámicas en base a contexto, intención y memoria.
-    No usa un LLM externo; sintetiza NLG con plantillas y varianza.
+    También genera finales narrativos (generate_ending).
     """
     def __init__(self, seed: Optional[int] = None):
         self.rnd = random.Random(seed)
@@ -113,7 +105,6 @@ class AIModelAdapter:
         return pressure
 
     def _phase_pressure(self, game_state) -> float:
-        # mayor presión a partir de DESARROLLO
         return 0.15 if game_state.phase.name != "INICIO" else 0.0
 
     def _quote_pressure(self, quoted) -> float:
@@ -130,7 +121,7 @@ class AIModelAdapter:
         facts = mem.told_facts.get(intent, set())
         return payload_text in facts
 
-    # ---------- decisión de veracidad ----------
+    # ---------- veracidad ----------
     def _decide_truth(self, character: Dict[str, Any], intent: str, game_state, quoted) -> Tuple[bool, float]:
         is_killer = character.get("is_killer", False)
         base_truth = character.get("truthfulness", 0.85)
@@ -151,14 +142,13 @@ class AIModelAdapter:
         truthful = self.rnd.random() < truth_chance
         return truthful, pressure
 
-    # ---------- construcción de payload ----------
+    # ---------- payload ----------
     def _build_payload(self, truthful: bool, character: Dict[str, Any], intent: str) -> Tuple[str, bool]:
         fact = _pick_factual(character, intent)
         evasive = False
         if truthful and fact:
             return fact, evasive
         if truthful and not fact:
-            # fallback contextual mínimo (no inventa fuera del mundo del circo)
             return "No tengo nada claro sobre eso, pero vi nervios y prisa tras bastidores.", evasive
         if not truthful and fact:
             evasive = True
@@ -172,7 +162,6 @@ class AIModelAdapter:
     # ---------- estilo según personalidad ----------
     def _style_tweak(self, text: str, character: Dict[str, Any], truthful: bool, pressure: float) -> str:
         persona = (character.get("personality") or "").lower()
-        # modulaciones ligeras
         if "sarcástico" in persona or "sarcastico" in persona:
             if not truthful or pressure > 0.25:
                 text += " (¿contento ahora?)"
@@ -202,7 +191,7 @@ class AIModelAdapter:
             return f" {react}"
         return ""
 
-    # ---------- publíca memoria & meta ----------
+    # ---------- publicar memoria ----------
     def _publish_memory_flags(self, game_state, name: str, intent: str, payload: str, truthful: bool, evasive: bool):
         game_state.remember_qa(name, intent, payload)
         if truthful and payload:
@@ -210,11 +199,11 @@ class AIModelAdapter:
         if evasive:
             game_state.increment_evasion(name)
 
-    # ---------- API principal ----------
+    # ---------- API: diálogo ----------
     def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]] = None, return_meta: bool=False):
         name = character["name"]
 
-        # 1) fuera de tema
+        # 1) fuera de tema (más permisivo en guardrails)
         if is_offtopic(question):
             s = f"{random.choice(OFFTOPIC_REFOCUS)} {enforce_focus()}"
             meta = {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True,"said_before":False}
@@ -245,7 +234,7 @@ class AIModelAdapter:
         prefix = f"[{name}] ({intent}) "
         response = f"{prefix}{opener} {payload_text}".strip()
 
-        # 8) reacciones a citas (acusación/apoyo)
+        # 8) reacciones a citas
         response += self._quote_tail(quoted, name)
 
         # 9) estilizar por personalidad
@@ -256,3 +245,108 @@ class AIModelAdapter:
         meta = {"intent": intent, "truthful": truthful, "payload": payload_text, "evasive": evasive, "said_before": said_before}
 
         return (response, meta) if return_meta else response
+
+    # ======================================================
+    # API: finales narrativos dinámicos
+    # ======================================================
+    def generate_ending(self, game_state, accused: str, characters: Dict[str, Any]) -> str:
+        rnd = self.rnd
+        killer = game_state.killer
+        suspects = game_state.suspects
+        ev = list(dict.fromkeys(game_state.evidence_revealed))  # únicas, mantener orden
+        ev_sample = ev[:3] if ev else []
+        lugar = "camarín del circo"
+
+        # Ayudas de sabor
+        killer_role = (characters.get(killer, {}).get("role") or "").lower()
+        killer_tone = (characters.get(killer, {}).get("personality") or "")
+        role_hint = ""
+        if "ilusionista" in killer_role:
+            role_hint = "juegos de manos y desvíos de atención"
+        elif "funámbul" in killer_role or "cuerda" in killer_tone:
+            role_hint = "destreza con cuerdas y equilibrio"
+        elif "payaso" in killer_role:
+            role_hint = "maquillaje, utilería y números que ocultan cicatrices"
+        elif "domador" in killer_role:
+            role_hint = "disciplina férrea y control del ritmo"
+        elif "hombre fuerte" in killer_role:
+            role_hint = "fuerza bruta escondida tras una sonrisa"
+        elif "contorsion" in killer_role:
+            role_hint = "flexibilidad imposible en espacios mínimos"
+
+        def fmt_evs():
+            if not ev_sample:
+                return "casi sin pruebas claras"
+            if len(ev_sample) == 1:
+                return f"la clave fue '{ev_sample[0]}'"
+            if len(ev_sample) == 2:
+                return f"las piezas '{ev_sample[0]}' y '{ev_sample[1]}'"
+            return f"las señales '{ev_sample[0]}', '{ev_sample[1]}' y '{ev_sample[2]}'"
+
+        # Éxito
+        if accused in suspects and accused == killer:
+            entradas = [
+                "Cuando el telón final cayó, la lógica ya no dejaba escapatoria.",
+                "La carpa entera contuvo el aliento; la historia encajaba por fin.",
+                "Entre olor a serrín y pintura vieja, la verdad se impuso.",
+            ]
+            cierre = [
+                "No hubo gritos; solo un asentir cansado. Había terminado.",
+                "Al verse acorralado, dejó caer la máscara. El circo volvió a respirar.",
+                "Una última mirada al espejo roto… y la confesión llegó como un suspiro.",
+            ]
+            pivot = [
+                "Lo esencial no fue el ruido, sino {ev} y cómo te guió hasta el {lugar}.",
+                "Seguiste el hilo correcto: {ev}. Nada más hacía sentido.",
+                "Cada detalle te condujo al mismo punto: {ev}.",
+            ]
+            oficio = f" Su acto dependía de {role_hint}." if role_hint else ""
+            ev_txt = fmt_evs().format(ev="—", lugar=lugar)  # placeholder
+            ev_txt = fmt_evs().replace("—", "")
+
+            return (
+                f"{rnd.choice(entradas)} {rnd.choice(pivot).format(ev=ev_txt, lugar=lugar)} "
+                f"{killer} ya no pudo sostener la coartada.{oficio} "
+                f"{rnd.choice(cierre)}"
+            )
+
+        # Acusaste a alguien inocente (pero es un sospechoso)
+        if accused in suspects and accused != killer:
+            entradas = [
+                "El nombre cayó como un mazo sobre la carpa en silencio.",
+                "Se oyó un murmullo: la acusación estaba hecha.",
+                "Las luces temblaron y por un instante pareció verdad.",
+            ]
+            contragolpe = [
+                "Pero las piezas no terminaban de encajar.",
+                "Aun así, algo chirrió: una sombra que no paraba de moverse.",
+                "Hubo un detalle que quedó sin aire.",
+            ]
+            cierre = [
+                "Cuando todo se disipó, {killer} ya no estaba: se había escurrido hacia la noche.",
+                "{killer} dejó el maquillaje en un balde y se fue sin mirar atrás.",
+                "Alguien rió lejos. Luego, silencio. Y {killer} había desaparecido.",
+            ]
+            ev_txt = fmt_evs()
+            return (
+                f"{rnd.choice(entradas)} Sin embargo, {rnd.choice(contragolpe)} "
+                f"Te aferraste a la versión equivocada y la pista real —{ev_txt}— apuntaba a otra parte. "
+                f"El asesino real era {killer}. {rnd.choice(cierre).format(killer=killer)}"
+            )
+
+        # Acusación inválida (no es sospechoso)
+        entradas = [
+            "El señalamiento fue confuso, como un truco mal ensayado.",
+            "Hubo dudas desde el primer segundo: nadie siguió esa línea.",
+            "El aire se cortó, pero no por la razón correcta.",
+        ]
+        cierre = [
+            "La carpa volvió a encenderse, y con ella, la rutina del olvido.",
+            "Los focos giraron hacia otro número; la verdad quedó en sombras.",
+            "Quedó un espejo roto, un olor a solvente y la sensación de haber mirado al lugar equivocado.",
+        ]
+        ev_txt = fmt_evs()
+        return (
+            f"{rnd.choice(entradas)} Te faltó un pliegue más: {ev_txt}. "
+            f"El asesino real era {killer}. {rnd.choice(cierre)}"
+        )

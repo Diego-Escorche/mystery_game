@@ -9,6 +9,7 @@ from gameplay.endings import resolve_accusation
 from ai.model import AIModelAdapter  # o usa HFModelAdapter si preferís el modelo real
 from ai.quote_parser import detect_quote
 from ai.prompts import PERSONALITIES
+from gameplay.endings import resolve_accusation
 
 # ======= CONFIGURACIÓN GENERAL =======
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -206,13 +207,13 @@ def phase_desarrollo(gs: GameState, chars, resolver: NameResolver, model):
 
 
 # ======= Fase 3 =======
-def phase_conclusion(gs: GameState):
+def phase_conclusion(gs: GameState, characters, model):
     print("\n=== FASE 3: CONCLUSIÓN ===")
     print("Evidencias encontradas:")
     if gs.evidence_revealed:
         for ev in gs.evidence_revealed:
             who = gs.evidence_sources.get(ev)
-            suffix = f" {CYAN}(aportada por {who}){RESET}" if who else ""
+            suffix = f" \033[96m(aportada por {who})\033[0m" if who else ""
             print(f" - {ev}{suffix}")
     else:
         print(" (ninguna)")
@@ -220,7 +221,7 @@ def phase_conclusion(gs: GameState):
     print("\n¿A quién acusas como responsable final?")
     accused = input("> ").strip()
     print("")
-    print(resolve_accusation(gs, accused))
+    print(resolve_accusation(gs, accused, model, characters))
 
 
 # ======= Ejecución general =======
@@ -236,7 +237,7 @@ def main():
     gs.set_phase(Phase.DESARROLLO)
     phase_desarrollo(gs, chars, resolver, model)
     gs.set_phase(Phase.CONCLUSION)
-    phase_conclusion(gs)
+    phase_conclusion(gs, chars, model)
 
 
 if __name__ == "__main__":
