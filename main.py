@@ -8,6 +8,7 @@ from world.casefile import MurderCase
 from gameplay.evidence import seed_evidence, reveal_next
 from gameplay.interrogations import interrogate
 from gameplay.endings import resolve_accusation
+from ai.quote_parser import detect_quote
 
 # Elegimos backend (HF por defecto). Si falta transformers/torch, caemos al stub.
 USE_STUB = os.getenv("USE_STUB", "0") == "1"
@@ -71,23 +72,23 @@ def phase_inicio(gs, chars, model):
         if gs.question_limits.get(target,0) <= 0:
             print("Sin preguntas restantes para esta fase con este personaje.")
             continue
+
         print("Tu pregunta:")
         q = input("> ").strip()
+
+        # NUEVO: auto-detección de citas dentro de la pregunta
         quoted = None
-        print("¿Citas lo que dijo otra persona? (si/no)")
-        yn = input("> ").strip().lower()
-        if yn == "si":
-            print("¿Quién lo dijo?")
-            spk = input("> ").strip()
-            print("¿De quién hablaba? (target)")
-            about = input("> ").strip()
-            print("Es acusación? (si/no)")
-            acc = input("> ").strip().lower() == "si"
-            print("Es apoyo? (si/no)")
-            sup = input("> ").strip().lower() == "si"
-            print("Contenido breve de la cita:")
-            content = input("> ").strip()
-            quoted = StatementEvent(speaker=spk, target=about, content=content, is_accusation=acc, is_support=sup)
+        qp = detect_quote(q, gs.suspects)
+        if qp:
+            from engine.state import StatementEvent
+            quoted = StatementEvent(
+                speaker=qp["source"],
+                target=qp.get("about"),
+                content=qp.get("content",""),
+                is_accusation=qp.get("is_accusation", False),
+                is_support=qp.get("is_support", False),
+            )
+
         ans = interrogate(gs, chars[target], q, model, quoted=quoted)
         print(ans)
 
@@ -98,8 +99,10 @@ def phase_desarrollo(gs, chars, model):
         print(f"[Nueva evidencia] {hint}")
     else:
         print("[Sin nueva evidencia disponible]")
+
     for s in gs.suspects:
         gs.question_limits[s] = rules.DEFAULT_QUESTION_LIMIT_PER_PHASE
+
     while True:
         print("\n¿A quién interrogar ahora? (o 'siguiente' para pasar a conclusión)")
         target = input("> ").strip()
@@ -111,9 +114,24 @@ def phase_desarrollo(gs, chars, model):
         if gs.question_limits.get(target,0) <= 0:
             print("Sin preguntas restantes con este personaje.")
             continue
+
         print("Tu pregunta:")
         q = input("> ").strip()
-        ans = interrogate(gs, chars[target], q, model, quoted=None)
+
+        # NUEVO: auto-detección de citas también en fase 2
+        quoted = None
+        qp = detect_quote(q, gs.suspects)
+        if qp:
+            from engine.state import StatementEvent
+            quoted = StatementEvent(
+                speaker=qp["source"],
+                target=qp.get("about"),
+                content=qp.get("content",""),
+                is_accusation=qp.get("is_accusation", False),
+                is_support=qp.get("is_support", False),
+            )
+
+        ans = interrogate(gs, chars[target], q, model, quoted=quoted)
         print(ans)
 
 def phase_conclusion(gs, chars):

@@ -1,7 +1,8 @@
 FOCUS_KEYWORDS = [
-    "canelitas","muerte","camarín","circo","símbolo","sangre","huella","alibi","coartada",
+    "víctima","victima","muerte","camarín","circo","símbolo","sangre","huella","alibi","coartada",
     "hora","arma","prueba","evidencia","sospechoso","acusación","culpable","testigo","escena",
-    "vagón","carpa","telón","espejo","pintura","cuerda"
+    "vagón","carpa","telón","espejo","pintura","cuerda",
+    "ñopin","ñopin desfijo"
 ]
 
 INTENT_KEYWORDS = {

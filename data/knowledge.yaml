@@ -8,7 +8,7 @@ Silvana:
       "Notó fibras cortadas en su cuerda de funambulista dos días antes del incidente.",
     ]
   RELACIONES: ["Desconfía de Jack por su temperamento con los animales."]
-  RUMOR: ["Escuchó a Bombita decir que Canelitas quería irse del circo."]
+  RUMOR: ["Escuchó a Bombita decir que Ñopin Desfijo quería irse del circo."]
 
 Madame Seraphine:
   COARTADA:
@@ -25,7 +25,8 @@ Grigori:
     ["Ayudaba a desmontar pesas tras el número, cerca del almacén de utilería."]
   PRUEBAS: ["Notó arena húmeda formando un rastro hacia los vagones."]
   RELACIONES: ["Protege a Silvana; no tolera abusos de Jack."]
-  RUMOR: ["Dice que Canelitas discutió con alguien del staff dos noches atrás."]
+  RUMOR:
+    ["Dice que Ñopin Desfijo discutió con alguien del staff dos noches atrás."]
 
 Lysandra:
   COARTADA:
@@ -40,17 +41,17 @@ Jack:
   COARTADA:
     ["Estaba guardando jaulas y chicotes en el vagón, lejos del camarín."]
   PRUEBAS: ["Dice que el espejo ya tenía una grieta vieja, no era nuevo."]
-  RELACIONES: ["Piensa que Canelitas era un problema porque quería irse."]
+  RELACIONES: ["Piensa que Ñopin Desfijo era un problema porque quería irse."]
   RUMOR: ["Asegura que Grigori defiende demasiado a Silvana por algo."]
 
 Mefisto (Bombita):
   COARTADA:
     ["Se cambiaba de maquillaje en otro camerino cuando escuchó el estruendo."]
-  PRUEBAS: ["Afirma haber visto una sombra salir del camarín de Canelitas."]
-  RELACIONES: ["Apreciaba a Canelitas, lo veía como un hermano cansado."]
+  PRUEBAS: ["Afirma haber visto una sombra salir del camarín de Ñopin Desfijo."]
+  RELACIONES: ["Apreciaba a Ñopin Desfijo, lo veía como un hermano cansado."]
   RUMOR: ["Oyó que la cuerda de Silvana estaba 'tocada'."]
 
-Canelitas:
+Ñopin Desfijo:
   COARTADA:
     [
       "Últimos días se lo veía cabizbajo, guardándose hasta tarde en el camarín.",

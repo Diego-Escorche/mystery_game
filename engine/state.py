@@ -61,7 +61,7 @@ class CharacterMemory:
 class GameState:
     phase: Phase = Phase.INICIO
     suspects: List[str] = field(default_factory=list)
-    victim: str = "Canelitas"
+    victim: str = "Ñopin Desfijo"
     killer: Optional[str] = None
     question_limits: Dict[str, int] = field(default_factory=dict)
     question_limit_per_phase: int = 3

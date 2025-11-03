@@ -38,6 +38,15 @@ class AIModelAdapter:
     def __init__(self, seed: Optional[int]=None):
         self.rnd = random.Random(seed)
 
+    def _said_before(self, game_state, name: str, intent: str, payload_text: str) -> bool:
+        if not payload_text:
+            return False
+        mem = game_state.per_character_memory.get(name)
+        if not mem:
+            return False
+        facts = mem.told_facts.get(intent, set())
+        return payload_text in facts
+
     def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]]=None, return_meta: bool=False):
         name = character["name"]
         is_killer = character.get("is_killer", False)
@@ -46,7 +55,8 @@ class AIModelAdapter:
 
         if is_offtopic(question):
             s = enforce_focus()
-            return (s, {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True}) if return_meta else s
+            meta = {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True,"said_before":False}
+            return (s, meta) if return_meta else s
 
         intent = classify_intent(question)
 
@@ -57,7 +67,6 @@ class AIModelAdapter:
             pressure += 0.15
         pressure += max(0.0, hostility) * 0.3
 
-        # Memoria: más presión si fue acusado antes, etc.
         mem = game_state.per_character_memory.get(name)
         if mem:
             pressure += min(0.3, 0.1 * len(mem.accused_by))
@@ -89,19 +98,23 @@ class AIModelAdapter:
             evasive = True
             payload = "No recuerdo nada útil en ese punto."
 
-        react = ""
+        said_before = self._said_before(game_state, name, intent, payload)
+
+        opener = "Seré directo:" if truthful else "No veo cómo eso ayuda…"
+        prefix = f"[{name}] ({intent}) "
+        if said_before and truthful:
+            text = f"{prefix}Ya lo comenté: {payload}"
+        else:
+            text = f"{prefix}{opener} {payload}"
+
         if quoted:
             src = quoted.get("source")
             about = quoted.get("about")
             if quoted.get("is_accusation") and (about == name or self.rnd.random() < 0.3):
-                react = f" Y si {src} me señala, diré que tiene sus propios fantasmas que esconder."
+                text += f" Y si {src} me señala, diré que tiene sus propios fantasmas que esconder."
             elif quoted.get("is_support") and about == name:
-                react = f" Supongo que {src} aún conserva algo de justicia en su mirada."
-
-        persona_tag = f"[{name}]"
-        opener = "Seré directo:" if truthful else "No veo cómo eso ayuda…"
-        text = f"{persona_tag} ({intent}) {opener} {payload}{react}"
+                text += f" Supongo que {src} aún conserva algo de justicia en su mirada."
 
         if return_meta:
-            return text, {"intent": intent, "truthful": truthful, "payload": payload, "evasive": evasive}
+            return text, {"intent": intent, "truthful": truthful, "payload": payload, "evasive": evasive, "said_before": said_before}
         return text

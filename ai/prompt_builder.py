@@ -4,7 +4,7 @@ from .guardrails import classify_intent
 SYSTEM_CORE = (
     "Eres un personaje dentro de un caso de misterio en un circo. "
     "Responde SIEMPRE en español, de forma breve (1–3 oraciones), "
-    "manteniendo el foco en la muerte de Canelitas. "
+    "manteniendo el foco en la muerte de la víctima. "
     "No inventes hechos fuera del contexto conocido. "
     "Si la pregunta está fuera de tema, redirige: "
     "\"Concentrémonos en el caso…\""
@@ -35,11 +35,13 @@ def build_prompt(
     quoted: Optional[Dict[str, Any]],
     payload_text: str,
     truthful: bool,
+    said_before: bool = False,
 ) -> str:
     name = character["name"]
     role = character.get("role", "")
     persona = character.get("personality", "")
     phase = game_state.phase.name
+    victim = getattr(game_state, "victim", "la víctima")
     evidence = " | ".join(game_state.evidence_revealed) if game_state.evidence_revealed else "—"
     intent = classify_intent(question)
 
@@ -60,19 +62,26 @@ def build_prompt(
     memory_line = _summarize_memory(name, game_state)
     debug_tag = f"[{name}] ({intent})"
 
+    ya_lo_comente_rule = (
+        "Si este hecho ya lo dijiste antes, COMIENZA la respuesta con: 'Ya lo comenté:' y resume en 1 oración."
+        if said_before else
+        "No incluyas 'Ya lo comenté' a menos que realmente ya lo hayas dicho antes."
+    )
+
     return (
         f"{SYSTEM_CORE}\n\n"
         f"[PERSONA]\n"
         f"Nombre: {name}\nRol: {role}\nRasgos: {persona}\n\n"
         f"[FASE] {phase}\n"
+        f"[VÍCTIMA] {victim}\n"
         f"[EVIDENCIAS_REVELADAS] {evidence}\n"
         f"[MEMORIA_PERSONAJE] {memory_line}\n"
         f"{cited}\n\n"
         f"[PREGUNTA]\n{question}\n\n"
         f"[PAYLOAD]\n{payload_text}\n\n"
         f"{veracity_rule}\n"
-        f"Estilo: directo si veraz, evasivo si mientes; 1–3 oraciones máximo. "
-        f"Si ya dijiste ese hecho antes, puedes decir “ya lo comenté” y resumir.\n"
+        f"{ya_lo_comente_rule}\n"
+        f"Estilo: directo si veraz, evasivo si mientes; 1–3 oraciones máximo.\n"
         f"Prefijo la respuesta exactamente con: {debug_tag} "
         f"y NO añadas nada antes del prefijo.\n"
     )

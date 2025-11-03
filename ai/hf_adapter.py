@@ -36,14 +36,23 @@ class HFModelAdapter:
         self.model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
             device_map=DEVICE_MAP,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            torch_dtype=torch.float16 if torch.cuda.is_available() and DEVICE_MAP!="cpu" else torch.float32,
         )
-        self.pipe = pipeline(
-            "text-generation",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=0 if torch.cuda.is_available() and DEVICE_MAP!="cpu" else -1,
-        )
+        # ¡Importante! No pasar `device` aquí si usamos accelerate/device_map
+        use_accelerate = getattr(self.model, "hf_device_map", None) is not None or DEVICE_MAP != "cpu"
+        if use_accelerate:
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+            )
+        else:
+            self.pipe = pipeline(
+                "text-generation",
+                model=self.model,
+                tokenizer=self.tokenizer,
+                device=-1,
+            )
 
     def _decide_truth(self, character: Dict[str, Any], question: str, game_state, quoted) -> Tuple[bool, str, float]:
         is_killer = character.get("is_killer", False)
@@ -59,12 +68,12 @@ class HFModelAdapter:
             pressure += 0.15
         pressure += max(0.0, hostility) * 0.3
 
-        # Presión adicional por memoria: si lo acusaron varios → más evasivo/mentiroso
+        # Memoria: más presión si fue acusado antes, etc.
         mem = game_state.per_character_memory.get(name)
         if mem:
-            pressure += min(0.3, 0.1 * len(mem.accused_by))  # hasta +0.3
-            pressure -= min(0.2, 0.05 * len(mem.supported_by))  # apoyos bajan presión
-            pressure += min(0.15, 0.03 * mem.evasion_count)     # si ya evadió, mantiene sesgo evasivo
+            pressure += min(0.3, 0.1 * len(mem.accused_by))
+            pressure -= min(0.2, 0.05 * len(mem.supported_by))
+            pressure += min(0.15, 0.03 * mem.evasion_count)
 
         if is_killer:
             lie_bias = INTENT_LIE_WEIGHTS_KILLER.get(intent, 0.1)
@@ -72,6 +81,7 @@ class HFModelAdapter:
         else:
             lie_bias = INTENT_LIE_WEIGHTS_INNOCENT.get(intent, 0.0)
             truth_chance = max(0.3, min(0.98, base_truth - pressure*0.1 + (-lie_bias)))
+
         truthful = self.rnd.random() < truth_chance
         return truthful, intent, pressure
 
@@ -91,15 +101,26 @@ class HFModelAdapter:
         evasive = True
         return "No recuerdo nada útil en ese punto.", evasive
 
+    def _said_before(self, game_state, name: str, intent: str, payload_text: str) -> bool:
+        if not payload_text:
+            return False
+        mem = game_state.per_character_memory.get(name)
+        if not mem:
+            return False
+        facts = mem.told_facts.get(intent, set())
+        return payload_text in facts
+
     def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]] = None, return_meta: bool=False):
         if is_offtopic(question):
             s = enforce_focus()
-            return (s, {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True}) if return_meta else s
+            meta = {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True,"said_before":False}
+            return (s, meta) if return_meta else s
 
         truthful, intent, _pressure = self._decide_truth(character, question, game_state, quoted)
         payload_text, evasive = self._payload(truthful, character, intent)
+        said_before = self._said_before(game_state, character["name"], intent, payload_text)
 
-        # Prompt con memoria
+        # Prompt con memoria y bandera de "ya lo comenté"
         from .prompt_builder import build_prompt
         prompt = build_prompt(
             character=character,
@@ -108,6 +129,7 @@ class HFModelAdapter:
             quoted=quoted,
             payload_text=payload_text,
             truthful=truthful,
+            said_before=said_before,
         )
 
         out = self.pipe(
@@ -125,7 +147,7 @@ class HFModelAdapter:
         name = character["name"]
         marker = f"[{name}] ({intent})"
         idx = out.rfind(marker)
-        text = out[idx:].strip() if idx >= 0 else f"{marker} {payload_text}"
+        text = out[idx:].strip() if idx >= 0 else f"{marker} " + (f"Ya lo comenté: {payload_text}" if said_before else payload_text)
 
-        meta = {"intent": intent, "truthful": truthful, "payload": payload_text, "evasive": evasive}
+        meta = {"intent": intent, "truthful": truthful, "payload": payload_text, "evasive": evasive, "said_before": said_before}
         return (text, meta) if return_meta else text

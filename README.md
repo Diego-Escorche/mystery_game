@@ -1,7 +1,7 @@
 # Mystery Game — Circo en el Desierto (CLI)
 
 Un juego de misterio en **3 fases** (Inicio → Desarrollo → Conclusión) ambientado en un circo en medio del desierto.
-Incluye **sospechoso aleatorio** (incluso Canelitas), **interrogatorios con memoria social**, **evidencias reales y ambiguas**,
+Incluye **sospechoso aleatorio** (incluso Ñopin desfijo), **interrogatorios con memoria social**, **evidencias reales y ambiguas**,
 y un **modelo de diálogo** con guardrails para evitar desvíos del caso.
 
 ### 🧠 Memoria por personaje

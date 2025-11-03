@@ -8,7 +8,8 @@ silvana_funambula:
     "Madame Seraphine": 0.1
     Jack: -0.2
     "Mefisto (Bombita)": -0.1
-    Canelitas: 0.3
+    "Ñopin Desfijo": 0.3
+
 madame_seraphine:
   name: "Madame Seraphine"
   role: "Ilusionista"
@@ -19,7 +20,8 @@ madame_seraphine:
     Lysandra: 0.2
     Jack: -0.1
     "Mefisto (Bombita)": 0.0
-    Canelitas: 0.2
+    "Ñopin Desfijo": 0.2
+
 grigori_fuerte:
   name: "Grigori"
   role: "Hombre fuerte"
@@ -30,7 +32,8 @@ grigori_fuerte:
     "Madame Seraphine": -0.1
     Jack: -0.2
     "Mefisto (Bombita)": 0.1
-    Canelitas: 0.1
+    "Ñopin Desfijo": 0.1
+
 lysandra_contorsionista:
   name: "Lysandra"
   role: "Contorsionista"
@@ -41,7 +44,8 @@ lysandra_contorsionista:
     "Madame Seraphine": 0.2
     Jack: 0.0
     "Mefisto (Bombita)": 0.1
-    Canelitas: 0.1
+    "Ñopin Desfijo": 0.1
+
 jack_domador:
   name: "Jack"
   role: "Domador"
@@ -52,7 +56,8 @@ jack_domador:
     Lysandra: 0.0
     "Madame Seraphine": -0.1
     "Mefisto (Bombita)": 0.1
-    Canelitas: -0.1
+    "Ñopin Desfijo": -0.1
+
 mefisto_bombita:
   name: "Mefisto (Bombita)"
   role: "Payaso"
@@ -63,11 +68,12 @@ mefisto_bombita:
     Lysandra: 0.1
     "Madame Seraphine": 0.0
     Jack: 0.1
-    Canelitas: 0.2
-canelitas:
-  name: "Canelitas"
+    "Ñopin Desfijo": 0.2
+
+ñopin_desfijo:
+  name: "Ñopin Desfijo"
   role: "Payaso principal"
-  personality_key: "canelitas"
+  personality_key: "ñopin_desfijo"
   relations:
     Silvana: 0.3
     Grigori: 0.1

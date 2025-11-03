@@ -5,5 +5,5 @@ PERSONALITIES = {
     "lysandra_contorsionista": "Ágil, evasiva y seductora en el discurso; evita fijarse en un solo punto.",
     "jack_domador": "Pragmático, controlador, con tono autoritario; siempre quiere tener la última palabra.",
     "mefisto_bombita": "Bromista negro, sarcástico, usa el humor para esconder miedo o culpa.",
-    "canelitas": "Melancólico, sensible, harto de la farsa; mezcla ternura con ironía.",
+    "ñopin_desfijo": "Melancólico, sensible, harto de la farsa; mezcla ternura con ironía.",
 }

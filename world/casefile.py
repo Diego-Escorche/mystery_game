@@ -6,7 +6,7 @@ class MurderCase:
     victim: str
     location: str = "Camarín del circo"
     initial_summary: str = (
-        "Canelitas fue hallado muerto en su camarín con la puerta cerrada. "
+        "Ñopin desfijo fue hallado muerto en su camarín con la puerta cerrada. "
         "No hay marcas visibles de violencia; el espejo está roto y hay símbolos extraños pintados."
     )
     suspects: List[str] = None
