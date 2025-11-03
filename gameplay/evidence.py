@@ -1,5 +1,5 @@
 import random
-from ..engine.state import GameState
+from engine.state import GameState
 
 REAL_EVIDENCE = [
     "Huella parcial en el espejo roto que no coincide con la víctima.",

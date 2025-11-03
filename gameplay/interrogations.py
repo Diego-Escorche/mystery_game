@@ -1,7 +1,7 @@
 from typing import Dict, Optional
-from ..engine.state import GameState, StatementEvent
-from ..engine import rules
-from ..ai.guardrails import classify_intent
+from engine.state import GameState, StatementEvent
+from engine import rules
+from ai.guardrails import classify_intent
 
 def quote_effect(gs: GameState, target: str, source: str, is_accusation: bool, is_support: bool) -> None:
     if is_accusation:

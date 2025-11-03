@@ -1,4 +1,4 @@
-from ..engine.state import GameState
+from engine.state import GameState
 
 def resolve_accusation(gs: GameState, accused: str) -> str:
     if accused == gs.killer:
