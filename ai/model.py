@@ -1,5 +1,5 @@
 import random
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from .guardrails import is_offtopic, enforce_focus, classify_intent
 
 INTENT_LIE_WEIGHTS_KILLER = {
@@ -12,7 +12,6 @@ INTENT_LIE_WEIGHTS_KILLER = {
     "RUMOR": 0.1,
     "GENERAL": 0.1,
 }
-
 INTENT_LIE_WEIGHTS_INNOCENT = {
     "COARTADA": -0.05,
     "PRUEBAS": -0.05,
@@ -39,14 +38,15 @@ class AIModelAdapter:
     def __init__(self, seed: Optional[int]=None):
         self.rnd = random.Random(seed)
 
-    def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]]=None) -> str:
+    def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]]=None, return_meta: bool=False):
         name = character["name"]
         is_killer = character.get("is_killer", False)
         base_truth = character.get("truthfulness", 0.85)
         hostility = character.get("hostility", 0.0)
 
         if is_offtopic(question):
-            return enforce_focus()
+            s = enforce_focus()
+            return (s, {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True}) if return_meta else s
 
         intent = classify_intent(question)
 
@@ -56,6 +56,13 @@ class AIModelAdapter:
         if game_state.phase.name != "INICIO":
             pressure += 0.15
         pressure += max(0.0, hostility) * 0.3
+
+        # Memoria: más presión si fue acusado antes, etc.
+        mem = game_state.per_character_memory.get(name)
+        if mem:
+            pressure += min(0.3, 0.1 * len(mem.accused_by))
+            pressure -= min(0.2, 0.05 * len(mem.supported_by))
+            pressure += min(0.15, 0.03 * mem.evasion_count)
 
         if is_killer:
             lie_bias = INTENT_LIE_WEIGHTS_KILLER.get(intent, 0.1)
@@ -67,16 +74,19 @@ class AIModelAdapter:
         truthful = self.rnd.random() < truth_chance
         fact = pick_factual(character, intent)
 
+        evasive = False
         if truthful and fact:
             payload = fact
         elif truthful and not fact:
             payload = "No tengo nada claro sobre eso, pero escuché pasos y tensión en el ambiente."
         elif not truthful and fact:
+            evasive = True
             if self.rnd.random() < 0.5:
                 payload = soften(fact)
             else:
                 payload = "No vi ni escuché nada que valga la pena sobre eso."
         else:
+            evasive = True
             payload = "No recuerdo nada útil en ese punto."
 
         react = ""
@@ -90,4 +100,8 @@ class AIModelAdapter:
 
         persona_tag = f"[{name}]"
         opener = "Seré directo:" if truthful else "No veo cómo eso ayuda…"
-        return f"{persona_tag} ({intent}) {opener} {payload}{react}"
+        text = f"{persona_tag} ({intent}) {opener} {payload}{react}"
+
+        if return_meta:
+            return text, {"intent": intent, "truthful": truthful, "payload": payload, "evasive": evasive}
+        return text

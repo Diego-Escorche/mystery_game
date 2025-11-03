@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import random
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
@@ -6,7 +6,6 @@ import torch
 from .config import MODEL_ID, DEVICE_MAP, MAX_NEW_TOKENS, TEMPERATURE, TOP_P, TOP_K
 from .guardrails import is_offtopic, enforce_focus, classify_intent
 
-# Reutilizamos la misma lógica de veracidad del stub para consistencia
 INTENT_LIE_WEIGHTS_KILLER = {
     "COARTADA": 0.25, "PRUEBAS": 0.2, "MÓVIL": 0.2, "RELACIONES": 0.1,
     "LUGAR": 0.15, "OBJETO": 0.15, "RUMOR": 0.1, "GENERAL": 0.1,
@@ -31,11 +30,6 @@ def _soften(text: str) -> str:
     return f"{random.choice(hedges)} {t}"
 
 class HFModelAdapter:
-    """
-    Adaptador para SmolLM3-3B con guardrails e intents.
-    - Selecciona veracidad/mentira con la misma heurística del stub.
-    - Arma un prompt con persona + payload de contenido (hecho/mentira) y el LLM redacta natural.
-    """
     def __init__(self, seed: Optional[int] = None):
         self.rnd = random.Random(seed)
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
@@ -51,10 +45,11 @@ class HFModelAdapter:
             device=0 if torch.cuda.is_available() and DEVICE_MAP!="cpu" else -1,
         )
 
-    def _decide_truth(self, character: Dict[str, Any], question: str, game_state, quoted):
+    def _decide_truth(self, character: Dict[str, Any], question: str, game_state, quoted) -> Tuple[bool, str, float]:
         is_killer = character.get("is_killer", False)
         base_truth = character.get("truthfulness", 0.85)
         hostility = character.get("hostility", 0.0)
+        name = character["name"]
 
         intent = classify_intent(question)
         pressure = 0.0
@@ -64,6 +59,13 @@ class HFModelAdapter:
             pressure += 0.15
         pressure += max(0.0, hostility) * 0.3
 
+        # Presión adicional por memoria: si lo acusaron varios → más evasivo/mentiroso
+        mem = game_state.per_character_memory.get(name)
+        if mem:
+            pressure += min(0.3, 0.1 * len(mem.accused_by))  # hasta +0.3
+            pressure -= min(0.2, 0.05 * len(mem.supported_by))  # apoyos bajan presión
+            pressure += min(0.15, 0.03 * mem.evasion_count)     # si ya evadió, mantiene sesgo evasivo
+
         if is_killer:
             lie_bias = INTENT_LIE_WEIGHTS_KILLER.get(intent, 0.1)
             truth_chance = max(0.05, min(0.95, 0.5 - pressure*0.25 - lie_bias))
@@ -71,26 +73,33 @@ class HFModelAdapter:
             lie_bias = INTENT_LIE_WEIGHTS_INNOCENT.get(intent, 0.0)
             truth_chance = max(0.3, min(0.98, base_truth - pressure*0.1 + (-lie_bias)))
         truthful = self.rnd.random() < truth_chance
-        return truthful, intent
+        return truthful, intent, pressure
 
-    def _payload(self, truthful: bool, character: Dict[str, Any], intent: str) -> str:
+    def _payload(self, truthful: bool, character: Dict[str, Any], intent: str) -> Tuple[str, bool]:
         fact = _pick_factual(character, intent)
+        evasive = False
         if truthful and fact:
-            return fact
+            return fact, evasive
         if truthful and not fact:
-            return "No tengo nada claro sobre eso, pero escuché pasos y tensión en el ambiente."
+            return "No tengo nada claro sobre eso, pero escuché pasos y tensión en el ambiente.", evasive
         if not truthful and fact:
-            return _soften(fact) if self.rnd.random() < 0.5 else "No vi ni escuché nada que valga la pena sobre eso."
-        return "No recuerdo nada útil en ese punto."
+            evasive = True
+            if self.rnd.random() < 0.5:
+                return _soften(fact), evasive
+            else:
+                return "No vi ni escuché nada que valga la pena sobre eso.", evasive
+        evasive = True
+        return "No recuerdo nada útil en ese punto.", evasive
 
-    def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]] = None) -> str:
+    def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]] = None, return_meta: bool=False):
         if is_offtopic(question):
-            return enforce_focus()
+            s = enforce_focus()
+            return (s, {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True}) if return_meta else s
 
-        truthful, intent = self._decide_truth(character, question, game_state, quoted)
-        payload_text = self._payload(truthful, character, intent)
+        truthful, intent, _pressure = self._decide_truth(character, question, game_state, quoted)
+        payload_text, evasive = self._payload(truthful, character, intent)
 
-        # Construimos prompt
+        # Prompt con memoria
         from .prompt_builder import build_prompt
         prompt = build_prompt(
             character=character,
@@ -113,12 +122,10 @@ class HFModelAdapter:
             pad_token_id=self.tokenizer.eos_token_id,
         )[0]["generated_text"]
 
-        # El modelo genera el prompt + la respuesta; recortamos para quedarnos desde el prefijo de respuesta.
-        # Buscamos la última ocurrencia del prefijo "[Nombre] (INTENT)"
         name = character["name"]
         marker = f"[{name}] ({intent})"
         idx = out.rfind(marker)
-        if idx >= 0:
-            return out[idx:].strip()
-        # Fallback mínimo si no aparece (raro)
-        return f"{marker} {payload_text}"
+        text = out[idx:].strip() if idx >= 0 else f"{marker} {payload_text}"
+
+        meta = {"intent": intent, "truthful": truthful, "payload": payload_text, "evasive": evasive}
+        return (text, meta) if return_meta else text

@@ -10,6 +10,24 @@ SYSTEM_CORE = (
     "\"Concentrémonos en el caso…\""
 )
 
+def _summarize_memory(character_name: str, game_state) -> str:
+    m = game_state.per_character_memory.get(character_name)
+    if not m:
+        return "—"
+    parts = []
+    if m.told_facts:
+        facts_count = sum(len(v) for v in m.told_facts.values())
+        parts.append(f"hechos_contados={facts_count}")
+    if m.accused_by:
+        parts.append(f"acusado_por={','.join(sorted(m.accused_by))}")
+    if m.supported_by:
+        parts.append(f"apoyado_por={','.join(sorted(m.supported_by))}")
+    if m.evasion_count:
+        parts.append(f"evasivas={m.evasion_count}")
+    if not parts:
+        return "—"
+    return "; ".join(parts)
+
 def build_prompt(
     character: Dict[str, Any],
     question: str,
@@ -18,10 +36,6 @@ def build_prompt(
     payload_text: str,
     truthful: bool,
 ) -> str:
-    """
-    Construye un prompt de una sola pasada (modelo causal) que guía el estilo/persona
-    y le da el contenido base a incluir (payload_text) según veracidad.
-    """
     name = character["name"]
     role = character.get("role", "")
     persona = character.get("personality", "")
@@ -43,7 +57,7 @@ def build_prompt(
         "Regla: Evita dar información incriminatoria; suaviza/evade el payload o contradícelo creíblemente sin inventar fuera del contexto."
     )
 
-    # Etiquetas de depuración: mantenemos [Nombre] (INTENT) para compatibilidad con el CLI actual
+    memory_line = _summarize_memory(name, game_state)
     debug_tag = f"[{name}] ({intent})"
 
     return (
@@ -52,11 +66,13 @@ def build_prompt(
         f"Nombre: {name}\nRol: {role}\nRasgos: {persona}\n\n"
         f"[FASE] {phase}\n"
         f"[EVIDENCIAS_REVELADAS] {evidence}\n"
+        f"[MEMORIA_PERSONAJE] {memory_line}\n"
         f"{cited}\n\n"
         f"[PREGUNTA]\n{question}\n\n"
         f"[PAYLOAD]\n{payload_text}\n\n"
         f"{veracity_rule}\n"
-        f"Estilo: directo si veraz, evasivo si mientes; 1–3 oraciones máximo.\n"
+        f"Estilo: directo si veraz, evasivo si mientes; 1–3 oraciones máximo. "
+        f"Si ya dijiste ese hecho antes, puedes decir “ya lo comenté” y resumir.\n"
         f"Prefijo la respuesta exactamente con: {debug_tag} "
         f"y NO añadas nada antes del prefijo.\n"
     )
