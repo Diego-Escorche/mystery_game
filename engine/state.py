@@ -20,18 +20,13 @@ class StatementEvent:
 @dataclass
 class CharacterMemory:
     """Memoria persistente por personaje para coherencia multi-ronda."""
-    # Historial breve de Q/A recientes (para eco de “ya te dije”)
     last_questions: deque = field(default_factory=lambda: deque(maxlen=5))
     last_answers: deque = field(default_factory=lambda: deque(maxlen=5))
-    # Hechos ya declarados (por intent)
     told_facts: Dict[str, Set[str]] = field(default_factory=dict)
-    # Quién lo acusó / quién lo defendió
     accused_by: Set[str] = field(default_factory=set)
     supported_by: Set[str] = field(default_factory=set)
-    # A quién acusó/apoyó este personaje (por si luego le preguntan y deba sostener)
     accused_others: Set[str] = field(default_factory=set)
     supported_others: Set[str] = field(default_factory=set)
-    # Contador de evasivas (si evade mucho, el jugador puede presionar distinto)
     evasion_count: int = 0
 
     def remember_fact(self, intent: str, text: str) -> None:
@@ -67,11 +62,13 @@ class GameState:
     question_limit_per_phase: int = 3
     statements_log: List[StatementEvent] = field(default_factory=list)
     evidence_revealed: List[str] = field(default_factory=list)
+    # NUEVO: quién aportó cada evidencia (texto exacto → nombre del personaje)
+    evidence_sources: Dict[str, str] = field(default_factory=dict)
     knowledge_tracker: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     relationship_matrix: Dict[Tuple[str, str], float] = field(default_factory=dict)
     rng_seed: Optional[int] = None
 
-    # Nueva: memoria por personaje
+    # Memoria por personaje
     per_character_memory: Dict[str, CharacterMemory] = field(default_factory=dict)
 
     def set_phase(self, new_phase: Phase) -> None:
