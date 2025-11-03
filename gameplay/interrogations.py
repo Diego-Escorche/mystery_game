@@ -1,70 +1,40 @@
-from typing import Dict, Optional
-from engine.state import GameState, StatementEvent
-from engine import rules
+from typing import Optional, Dict, Any
+from ai.model import CLUE_INTENTS
 
-# ===== Colores ANSI (CLI) =====
-USE_COLOR = True  # ponlo en False si tu terminal no soporta ANSI
-RESET  = "\033[0m"  if USE_COLOR else ""
-BOLD   = "\033[1m"  if USE_COLOR else ""
-GREEN  = "\033[92m" if USE_COLOR else ""
-YELLOW = "\033[93m" if USE_COLOR else ""
-CYAN   = "\033[96m" if USE_COLOR else ""
+# Colores CLI
+RESET = "\033[0m"
+BOLD = "\033[1m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+CYAN = "\033[96m"
 
-# Intents que consideramos “pista” cuando son veraces
-CLUE_INTENTS = {"PRUEBAS", "OBJETO", "LUGAR"}
-
-def quote_effect(gs: GameState, target: str, source: str, is_accusation: bool, is_support: bool) -> None:
-    if is_accusation:
-        gs.adjust_relationship(target, source, rules.RELATION_ACCUSATION_IMPACT)
-        gs.mark_accusation(target=target, source=source)
-    if is_support:
-        gs.adjust_relationship(target, source, rules.RELATION_SUPPORT_IMPACT)
-        gs.mark_support(target=target, source=source)
-
-def interrogate(gs: GameState, character: Dict, question: str, model, quoted: Optional[StatementEvent]=None) -> str:
+def _mark_clue(gs, speaker: str, payload: str) -> str:
     """
-    Ejecuta un interrogatorio. Registra memoria y, si el personaje aporta una
-    pista veraz (según intent), agrega la pista al registro, anota quién la aportó
-    y devuelve el texto con la marca visual en CLI.
+    Agrega la pista a game_state si no estaba; devuelve la línea decorada para imprimir.
+    """
+    if not payload:
+        return ""
+    if payload not in gs.evidence_revealed:
+        gs.evidence_revealed.append(payload)
+        gs.evidence_sources[payload] = speaker
+        return f"\n{GREEN}{BOLD}Pista encontrada:{RESET} {payload} {CYAN}(aportada por {speaker}){RESET}"
+    return ""
+
+def interrogate(gs, character: Dict[str, Any], question: str, model, quoted: Optional[Any] = None) -> str:
+    """
+    Orquesta la llamada al modelo y aplica la lógica de detección/registro de pistas.
     """
     name = character["name"]
-    gs.question_limits[name] = max(0, gs.question_limits.get(name, gs.question_limit_per_phase) - 1)
 
-    quoted_payload = None
-    if quoted:
-        quote_effect(gs, target=name, source=quoted.speaker, is_accusation=quoted.is_accusation, is_support=quoted.is_support)
-        quoted_payload = {
-            "source": quoted.speaker,
-            "about": quoted.target,
-            "is_accusation": quoted.is_accusation,
-            "is_support": quoted.is_support,
-            "content": quoted.content,
-        }
+    # Llama al modelo y recupera meta
+    answer, meta = model.generate(character, question, gs, quoted=quoted, return_meta=True)
 
-    # Pedimos meta para saber intent/veracidad/payload
-    answer, meta = model.generate(character, question, gs, quoted=quoted_payload, return_meta=True)
+    # Consumo de “turno” de preguntas
+    gs.question_limits[name] = max(0, gs.question_limits.get(name, 0) - 1)
 
-    # Log + memoria básica
-    gs.record_statement(StatementEvent(speaker=name, target=None, content=answer))
-    gs.remember_qa(name, question, answer)
-
-    intent = meta.get("intent", "GENERAL")
-    payload = meta.get("payload", "")
-    truthful = meta.get("truthful", False)
-    evasive = meta.get("evasive", False)
-
-    # Guardar hecho declarado si fue veraz
-    if truthful and payload:
-        gs.remember_fact(name, intent, payload)
-    if evasive:
-        gs.increment_evasion(name)
-
-    # --- Si el payload es veraz y el intent es de pista, registrarla y mostrar mensaje destacado ---
-    if truthful and payload and intent in CLUE_INTENTS:
-        if payload not in gs.evidence_revealed:
-            gs.evidence_revealed.append(payload)
-            gs.evidence_sources[payload] = name  # ← quién la aportó
-            clue_line = f"{GREEN}{BOLD}Pista encontrada{RESET}: {payload} {BOLD}(aportada por {name}){RESET}"
-            answer = f"{answer}\n{clue_line}"
+    # Si es veraz y hay payload y la intención es de pista -> registrar
+    if meta.get("truthful") and meta.get("payload") and meta.get("intent") in CLUE_INTENTS:
+        badge = _mark_clue(gs, name, meta["payload"])
+        return f"{answer}{badge}"
 
     return answer

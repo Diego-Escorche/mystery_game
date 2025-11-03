@@ -1,73 +1,27 @@
-# ai/model.py
+import json
 import random
+import re
+import unicodedata
 from typing import Dict, Any, Optional, Tuple
+
 from .guardrails import is_offtopic, enforce_focus, classify_intent
 
-# =========================
-# Utilidades de estilo NLG
-# =========================
+CLUE_INTENTS = {"PRUEBAS", "OBJETO", "LUGAR", "RUMOR"}
 
-DIRECT_OPENERS = [
-    "Seré directo:",
-    "Hablando claro:",
-    "Voy al punto:",
-    "No daré rodeos:",
-]
-
-EVASIVE_OPENERS = [
-    "No veo cómo eso ayuda…",
-    "No estoy seguro de que sea relevante ahora…",
-    "Preferiría no entrar en eso…",
-    "No creo que sea el momento para hablar de eso…",
-]
-
-HEDGE_PREFIXES = [
-    "Quizá",
-    "Podría ser que",
-    "Diría que",
-    "No estoy totalmente seguro, pero",
-]
-
-ACCUSATION_REACTIONS = [
-    "Si {src} me señala, {counter}.",
-    "Y si {src} insiste en culparme, {counter}.",
-    "Si {src} anda diciendo eso, {counter}.",
-]
-COUNTERS = [
-    "tal vez es porque {src_pron} esconde algo peor",
-    "que explique qué hacía cuando nadie miraba",
-    "que cuente por qué mintió antes",
-    "yo también tengo preguntas para {src_pron}",
-]
-
-SUPPORT_REACTIONS = [
-    "Supongo que {src} aún conserva algo de justicia.",
-    "Agradezco que {src} diga eso.",
-    "Tal vez {src} no esté tan equivocado esta vez.",
-]
-
-OFFTOPIC_REFOCUS = [
-    "Concentrémonos en el caso.",
-    "Volvamos a la muerte de la víctima.",
-    "No perdamos el foco: el asesinato.",
-]
-
-# Qué intents se consideran “pista” si el contenido es veraz (lo usa gameplay/interrogations)
-CLUE_INTENTS = {"PRUEBAS", "OBJETO", "LUGAR"}
-
-# Viés de mentira por intención (asesino vs inocente)
 INTENT_LIE_WEIGHTS_KILLER = {
     "COARTADA": 0.28, "PRUEBAS": 0.22, "MÓVIL": 0.22, "RELACIONES": 0.12,
-    "LUGAR": 0.18, "OBJETO": 0.18, "RUMOR": 0.10, "GENERAL": 0.08,
+    "LUGAR": 0.18, "OBJETO": 0.18, "RUMOR": 0.18, "GENERAL": 0.08,
 }
 INTENT_LIE_WEIGHTS_INNOCENT = {
     "COARTADA": -0.05, "PRUEBAS": -0.05, "MÓVIL": -0.02, "RELACIONES": 0.0,
     "LUGAR": 0.0, "OBJETO": 0.0, "RUMOR": 0.0, "GENERAL": 0.0,
 }
 
-# =========================
-# Ayudas de selección factual
-# =========================
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+def _norm(s: str) -> str:
+    return _strip_accents(s.lower().strip())
 
 def _pick_factual(character: Dict[str, Any], intent: str) -> Optional[str]:
     kn = character.get("knowledge", {})
@@ -76,277 +30,341 @@ def _pick_factual(character: Dict[str, Any], intent: str) -> Optional[str]:
         return random.choice(bucket)
     return None
 
-def _soften(text: str) -> str:
-    if not text:
-        return "No estoy totalmente seguro."
-    t = text[0].lower() + text[1:] if text and text[0].isupper() else text
-    return f"{random.choice(HEDGE_PREFIXES)} {t}"
+def _relationship_pressure(game_state, name: str) -> float:
+    mem = game_state.per_character_memory.get(name)
+    pressure = 0.0
+    if mem:
+        pressure += min(0.30, 0.10 * len(mem.accused_by))
+        pressure -= min(0.20, 0.05 * len(mem.supported_by))
+        pressure += min(0.15, 0.03 * mem.evasion_count)
+    return pressure
 
-# =========================
-# Lógica principal del stub (diálogo)
-# =========================
+def _phase_pressure(game_state) -> float:
+    return 0.15 if game_state.phase.name != "INICIO" else 0.0
+
+def _quote_pressure(quoted) -> float:
+    if quoted and quoted.get("is_accusation"):
+        return 0.25
+    return 0.0
+
+def _said_before(game_state, name: str, intent: str, payload_text: str) -> bool:
+    if not payload_text:
+        return False
+    mem = game_state.per_character_memory.get(name)
+    if not mem:
+        return False
+    facts = mem.told_facts.get(intent, set())
+    return payload_text in facts
+
+def _rel_label(score: float) -> str:
+    if score >= 0.35:
+        return "defiende / confía"
+    if score <= -0.35:
+        return "desconfía / podría acusar"
+    return "neutral / ambiguo"
+
+def _detect_target_person(game_state, question: str) -> Optional[str]:
+    q = _norm(question)
+    for s in game_state.suspects:
+        if _norm(s) in q:
+            return s
+    return None
+
+class PromptBuilder:
+    @staticmethod
+    def brief_character(character: Dict[str, Any]) -> str:
+        return (
+            f"Nombre: {character.get('name')}\n"
+            f"Rol: {character.get('role','')}\n"
+            f"Personalidad: {character.get('personality','')}\n"
+        )
+
+    @staticmethod
+    def brief_context(game_state, quoted: Optional[Dict[str, Any]]) -> str:
+        evs = game_state.evidence_revealed[-5:] if game_state.evidence_revealed else []
+        ev_text = ("- " + "\n- ".join(evs)) if evs else "(sin evidencias registradas)"
+        quoted_text = ""
+        if quoted:
+            src = quoted.get("source")
+            about = quoted.get("about")
+            content = quoted.get("content","")
+            acc = "acusación" if quoted.get("is_accusation") else ("apoyo" if quoted.get("is_support") else "cita")
+            quoted_text = f"\nÚltima cita: {acc} de {src} sobre {about}: “{content}”."
+        return (
+            f"Fase: {game_state.phase.name}\n"
+            f"Víctima: {game_state.victim}\n"
+            f"Evidencias recientes:\n{ev_text}{quoted_text}"
+        )
+
+    @staticmethod
+    def brief_relations(game_state, name: str, target_person: Optional[str]) -> str:
+        parts = []
+        for other in game_state.suspects:
+            if other == name:
+                continue
+            v = game_state.get_relationship(name, other)
+            if abs(v) >= 0.2 or (target_person and other == target_person):
+                tag = _rel_label(v)
+                parts.append(f"{other}: {tag} ({v:+.2f})")
+        return "Relaciones relevantes: " + (", ".join(parts) if parts else "(neutras)")
+
+    @staticmethod
+    def build_dialog_prompt(
+        character: Dict[str, Any],
+        question: str,
+        intent: str,
+        policy: str,
+        must_include_clue: bool,
+        selected_payload: Optional[str],
+        game_state,
+        quoted: Optional[Dict[str, Any]],
+        target_person: Optional[str]
+    ) -> str:
+        sheet = PromptBuilder.brief_character(character)
+        ctx = PromptBuilder.brief_context(game_state, quoted)
+        rels = PromptBuilder.brief_relations(game_state, character["name"], target_person)
+
+        rel_line = ""
+        if target_person:
+            score = game_state.get_relationship(character["name"], target_person)
+            rel_line = f"\n[TARGET_PERSON]\nPersona objetivo mencionada por el jugador: {target_person}\nRelación hacia {target_person}: {_rel_label(score)} ({score:+.2f})\n- Si la relación es negativa, puedes insinuar sospecha.\n- Si es positiva, tiende a defender o matizar a favor.\n"
+
+        clue_guidance = ""
+        if must_include_clue and selected_payload:
+            clue_guidance = (
+                "\n- Debes INCLUIR esta pista de forma natural y verificable para el jugador: "
+                f"«{selected_payload}». No la inventes; exprésala con tus palabras."
+            )
+
+        return f"""\
+[SYSTEM]
+Responde SOLO como el personaje. Sin narrador externo, sin etiquetas adicionales.
+No inventes hechos fuera del mundo del circo ni contradigas evidencias registradas.
+Mantén foco en el caso; si la pregunta es ajena, recentra brevemente y vuelve al caso.
+
+[CHARACTER SHEET]
+{sheet}
+
+[CONTEXT]
+{ctx}
+
+{rels}{rel_line}
+[QUESTION]
+Jugador: "{question}"
+
+[INTENT]
+{intent}
+
+[POLICY]
+Decisión: {policy}
+- TRUTH: responder verazmente con detalles concretos del mundo (evita vaguedades).
+- LIE: engaños plausibles y consistentes con personalidad/relaciones; no contradigas pruebas obvias.
+- HEDGE: ambiguo/parsimonioso sin negar todo; puedes usar cautela.
+
+[STYLE]
+- 1–3 oraciones. Tono acorde a la personalidad. Reacciona a acusación/apoyo si aplica.
+{clue_guidance}
+
+[OUTPUT FORMAT]
+<META>{{"intent":"{intent}","truthful":{str(policy=='TRUTH').lower()},"payload":"<hecho/pista base si corresponde>","evasive":{str(policy!='TRUTH').lower()},"said_before":false}}</META>
+{{LÍNEA DE DIÁLOGO DEL PERSONAJE}}\
+"""
+
+    @staticmethod
+    def build_ending_prompt(game_state, accused: str, characters: Dict[str, Any]) -> str:
+        killer = game_state.killer
+        ev = list(dict.fromkeys(game_state.evidence_revealed))[:3]
+        ev_text = ", ".join(ev) if ev else "casi sin pruebas claras"
+        killer_role = (characters.get(killer, {}).get("role") or "").lower()
+        role_hint = ""
+        if "ilusionista" in killer_role:
+            role_hint = "juegos de manos y desvíos de atención"
+        elif "funámbul" in killer_role:
+            role_hint = "destreza con cuerdas y equilibrio"
+        elif "payaso" in killer_role:
+            role_hint = "maquillaje y utilería"
+        elif "domador" in killer_role:
+            role_hint = "disciplina férrea"
+        elif "hombre fuerte" in killer_role:
+            role_hint = "fuerza bruta detrás de una sonrisa"
+        elif "contorsion" in killer_role:
+            role_hint = "flexibilidad imposible"
+
+        outcome = ("ACIERTO" if accused == killer else ("INOCENTE" if accused in game_state.suspects else "INVALIDA"))
+        return f"""\
+[SYSTEM] Eres un narrador sobrio. Cierre breve (4–6 oraciones) en tono noir.
+
+[DATA]
+Acusado por el jugador: {accused}
+Asesino real: {killer}
+Evidencias clave: {ev_text}
+Rol del asesino: {killer_role} ({role_hint})
+
+[OUTCOME]
+{outcome}
+
+[FORMAT]
+Devuelve SOLO el relato final.\
+"""
 
 class AIModelAdapter:
-    """
-    Stub generativo: produce respuestas dinámicas en base a contexto, intención y memoria.
-    También genera finales narrativos (generate_ending).
-    """
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, llm_backend: Optional[Any] = None):
         self.rnd = random.Random(seed)
+        self.llm = llm_backend
 
-    # ---------- señales contextuales ----------
-    def _relationship_pressure(self, game_state, name: str) -> float:
-        mem = game_state.per_character_memory.get(name)
-        pressure = 0.0
-        if mem:
-            pressure += min(0.30, 0.10 * len(mem.accused_by))
-            pressure -= min(0.20, 0.05 * len(mem.supported_by))
-            pressure += min(0.15, 0.03 * mem.evasion_count)
-        return pressure
-
-    def _phase_pressure(self, game_state) -> float:
-        return 0.15 if game_state.phase.name != "INICIO" else 0.0
-
-    def _quote_pressure(self, quoted) -> float:
-        if quoted and quoted.get("is_accusation"):
-            return 0.25
-        return 0.0
-
-    def _is_said_before(self, game_state, name: str, intent: str, payload_text: str) -> bool:
-        if not payload_text:
-            return False
-        mem = game_state.per_character_memory.get(name)
-        if not mem:
-            return False
-        facts = mem.told_facts.get(intent, set())
-        return payload_text in facts
-
-    # ---------- veracidad ----------
-    def _decide_truth(self, character: Dict[str, Any], intent: str, game_state, quoted) -> Tuple[bool, float]:
+    def _decide_truth(self, character: Dict[str, Any], intent: str, game_state, quoted) -> Tuple[str, float]:
         is_killer = character.get("is_killer", False)
         base_truth = character.get("truthfulness", 0.85)
         hostility = character.get("hostility", 0.0)
 
-        pressure = self._phase_pressure(game_state)
-        pressure += self._relationship_pressure(game_state, character["name"])
-        pressure += self._quote_pressure(quoted)
+        pressure = _phase_pressure(game_state)
+        pressure += _relationship_pressure(game_state, character["name"])
+        pressure += _quote_pressure(quoted)
         pressure += max(0.0, hostility) * 0.30
 
         if is_killer:
             lie_bias = INTENT_LIE_WEIGHTS_KILLER.get(intent, 0.10)
-            truth_chance = max(0.05, min(0.95, 0.50 - pressure*0.25 - lie_bias))
+            truth_chance = max(0.05, min(0.85, 0.50 - pressure*0.25 - lie_bias))
+            if intent in CLUE_INTENTS:
+                phase = game_state.phase.name
+                phase_floor = 0.12 if phase == "INICIO" else (0.20 if phase == "DESARROLLO" else 0.28)
+                truth_chance = max(truth_chance, phase_floor)
         else:
             lie_bias = INTENT_LIE_WEIGHTS_INNOCENT.get(intent, 0.0)
             truth_chance = max(0.30, min(0.98, base_truth - pressure*0.10 + (-lie_bias)))
 
-        truthful = self.rnd.random() < truth_chance
-        return truthful, pressure
+        r = self.rnd.random()
+        policy = "TRUTH" if r < truth_chance else ("LIE" if self.rnd.random() < 0.5 else "HEDGE")
+        return policy, pressure
 
-    # ---------- payload ----------
-    def _build_payload(self, truthful: bool, character: Dict[str, Any], intent: str) -> Tuple[str, bool]:
-        fact = _pick_factual(character, intent)
-        evasive = False
-        if truthful and fact:
-            return fact, evasive
-        if truthful and not fact:
-            return "No tengo nada claro sobre eso, pero vi nervios y prisa tras bastidores.", evasive
-        if not truthful and fact:
-            evasive = True
-            if self.rnd.random() < 0.5:
-                return _soften(fact), evasive
-            else:
-                return "No vi ni escuché nada que valga la pena sobre eso.", evasive
-        evasive = True
-        return "No recuerdo nada útil en ese punto.", evasive
-
-    # ---------- estilo según personalidad ----------
-    def _style_tweak(self, text: str, character: Dict[str, Any], truthful: bool, pressure: float) -> str:
-        persona = (character.get("personality") or "").lower()
-        if "sarcástico" in persona or "sarcastico" in persona:
-            if not truthful or pressure > 0.25:
-                text += " (¿contento ahora?)"
-        if "perfeccionista" in persona or "tensa" in persona:
-            if truthful and self.rnd.random() < 0.3:
-                text = text.replace("No daré rodeos:", "Voy al punto:") if "No daré rodeos:" in text else text
-        if "críptica" in persona or "críptico" in persona:
-            if truthful and self.rnd.random() < 0.35:
-                text += " Mira más allá de lo obvio."
-        if "directo" in persona or "pragmático" in persona or "pragmatico" in persona:
-            if truthful and self.rnd.random() < 0.35:
-                text = text.replace("Seré directo:", "Voy al grano:") if "Seré directo:" in text else f"Voy al grano: {text}"
-        return text
-
-    # ---------- reacción a citas ----------
-    def _quote_tail(self, quoted: Optional[Dict[str, Any]], name: str) -> str:
-        if not quoted:
-            return ""
-        src = quoted.get("source")
-        about = quoted.get("about")
-        if quoted.get("is_accusation") and (about == name or self.rnd.random() < 0.30):
-            counter = random.choice(COUNTERS).format(src_pron=src)
-            react = random.choice(ACCUSATION_REACTIONS).format(src=src, counter=counter)
-            return f" {react}"
-        if quoted.get("is_support") and about == name:
-            react = random.choice(SUPPORT_REACTIONS).format(src=src)
-            return f" {react}"
-        return ""
-
-    # ---------- publicar memoria ----------
     def _publish_memory_flags(self, game_state, name: str, intent: str, payload: str, truthful: bool, evasive: bool):
-        game_state.remember_qa(name, intent, payload)
+        game_state.remember_qa(name, intent, payload or "")
         if truthful and payload:
             game_state.remember_fact(name, intent, payload)
         if evasive:
             game_state.increment_evasion(name)
 
-    # ---------- API: diálogo ----------
+    def _llm_generate(self, prompt: str) -> str:
+        if self.llm is None:
+            return ""
+        try:
+            return self.llm.generate(prompt)
+        except Exception:
+            return ""
+
+    def _fallback_line(self, *, name: str, intent: str, policy: str, payload: Optional[str],
+                       target_person: Optional[str], rel_score: Optional[float]) -> Tuple[str, Dict[str, Any]]:
+        truthful = (policy == "TRUTH")
+        evasive = (policy != "TRUTH")
+        said_before_flag = False
+
+        # Redacción mínima sin frases enlatadas:
+        pieces = []
+
+        if target_person:
+            # opinión basada en relación
+            if rel_score is not None:
+                if rel_score >= 0.35:
+                    pieces.append(f"{target_person} no se me hace sospechosa; la he visto actuar con calma.")
+                elif rel_score <= -0.35:
+                    pieces.append(f"{target_person} me inquieta; hubo gestos y tensión poco normales.")
+                else:
+                    pieces.append(f"De {target_person} no tengo postura firme; hubo actitudes ambiguas.")
+        # payload si hay
+        if truthful and payload:
+            pieces.append(payload)
+        elif policy == "LIE":
+            pieces.append("No tengo nada útil que aportar en ese punto.")
+        else:  # HEDGE
+            pieces.append("No podría afirmarlo con seguridad.")
+
+        line = " ".join(pieces).strip()
+        meta = {
+            "intent": intent,
+            "truthful": truthful,
+            "payload": payload or "",
+            "evasive": evasive,
+            "said_before": said_before_flag
+        }
+        meta_str = f'<META>{json.dumps(meta, ensure_ascii=False)}</META>'
+        return f"{meta_str}\n{line}", meta
+
+    def _parse_meta(self, text: str) -> Tuple[str, Dict[str, Any]]:
+        m = re.search(r"<META>(.*?)</META>\s*(.*)$", text.strip(), re.DOTALL)
+        if not m:
+            return text.strip(), {"intent":"GENERAL","truthful":False,"payload":"","evasive":True,"said_before":False}
+        meta_raw = m.group(1).strip()
+        spoken = m.group(2).strip()
+        try:
+            meta = json.loads(meta_raw)
+        except Exception:
+            meta = {"intent":"GENERAL","truthful":False,"payload":"","evasive":True,"said_before":False}
+        return spoken, meta
+
     def generate(self, character: Dict[str, Any], question: str, game_state, quoted: Optional[Dict[str, Any]] = None, return_meta: bool=False):
         name = character["name"]
 
-        # 1) fuera de tema (más permisivo en guardrails)
         if is_offtopic(question):
-            s = f"{random.choice(OFFTOPIC_REFOCUS)} {enforce_focus()}"
+            s = f"Concentrémonos en el caso; {enforce_focus()}"
             meta = {"intent":"GENERAL","truthful":True,"payload":s,"evasive":True,"said_before":False}
-            return (f"[{name}] (GENERAL) {s}", meta) if return_meta else f"[{name}] (GENERAL) {s}"
+            line = f"{s}"
+            return (f"[{name}] (GENERAL) {line}", meta) if return_meta else f"[{name}] (GENERAL) {line}"
 
-        # 2) intención
+        # Intento base
         intent = classify_intent(question)
 
-        # 3) decidir veracidad
-        truthful, pressure = self._decide_truth(character, intent, game_state, quoted)
+        # Si el jugador menciona a un sospechoso concreto, pasa TARGET_PERSON y refuerza RELACIONES/RUMOR
+        target_person = _detect_target_person(game_state, question)
+        if target_person:
+            if intent == "GENERAL":
+                # si formula “qué me dices de X”, cae en RELACIONES por guardrails; si no, forzamos RELACIONES
+                intent = "RELACIONES"
 
-        # 4) construir payload factual/evitativo
-        payload_text, evasive = self._build_payload(truthful, character, intent)
+        policy, _ = self._decide_truth(character, intent, game_state, quoted)
+        payload = _pick_factual(character, intent)
+        must_include_clue = (policy == "TRUTH") and bool(payload) and (intent in CLUE_INTENTS)
 
-        # 5) ¿ya lo había dicho?
-        said_before = self._is_said_before(game_state, name, intent, payload_text)
+        # Rel score hacia target (si lo hay)
+        rel_score = game_state.get_relationship(name, target_person) if target_person else None
 
-        # 6) prefijos variados
-        opener = ""
-        if said_before and truthful:
-            opener = "Ya lo comenté:"
-        elif truthful:
-            opener = random.choice(DIRECT_OPENERS)
-        else:
-            opener = random.choice(EVASIVE_OPENERS)
-
-        # 7) arma respuesta base
-        prefix = f"[{name}] ({intent}) "
-        response = f"{prefix}{opener} {payload_text}".strip()
-
-        # 8) reacciones a citas
-        response += self._quote_tail(quoted, name)
-
-        # 9) estilizar por personalidad
-        response = self._style_tweak(response, character, truthful, pressure)
-
-        # 10) publicar memoria y meta
-        self._publish_memory_flags(game_state, name, intent, payload_text, truthful, evasive)
-        meta = {"intent": intent, "truthful": truthful, "payload": payload_text, "evasive": evasive, "said_before": said_before}
-
-        return (response, meta) if return_meta else response
-
-    # ======================================================
-    # API: finales narrativos dinámicos
-    # ======================================================
-    def generate_ending(self, game_state, accused: str, characters: Dict[str, Any]) -> str:
-        rnd = self.rnd
-        killer = game_state.killer
-        suspects = game_state.suspects
-        ev = list(dict.fromkeys(game_state.evidence_revealed))  # únicas, mantener orden
-        ev_sample = ev[:3] if ev else []
-        lugar = "camarín del circo"
-
-        # Ayudas de sabor
-        killer_role = (characters.get(killer, {}).get("role") or "").lower()
-        killer_tone = (characters.get(killer, {}).get("personality") or "")
-        role_hint = ""
-        if "ilusionista" in killer_role:
-            role_hint = "juegos de manos y desvíos de atención"
-        elif "funámbul" in killer_role or "cuerda" in killer_tone:
-            role_hint = "destreza con cuerdas y equilibrio"
-        elif "payaso" in killer_role:
-            role_hint = "maquillaje, utilería y números que ocultan cicatrices"
-        elif "domador" in killer_role:
-            role_hint = "disciplina férrea y control del ritmo"
-        elif "hombre fuerte" in killer_role:
-            role_hint = "fuerza bruta escondida tras una sonrisa"
-        elif "contorsion" in killer_role:
-            role_hint = "flexibilidad imposible en espacios mínimos"
-
-        def fmt_evs():
-            if not ev_sample:
-                return "casi sin pruebas claras"
-            if len(ev_sample) == 1:
-                return f"la clave fue '{ev_sample[0]}'"
-            if len(ev_sample) == 2:
-                return f"las piezas '{ev_sample[0]}' y '{ev_sample[1]}'"
-            return f"las señales '{ev_sample[0]}', '{ev_sample[1]}' y '{ev_sample[2]}'"
-
-        # Éxito
-        if accused in suspects and accused == killer:
-            entradas = [
-                "Cuando el telón final cayó, la lógica ya no dejaba escapatoria.",
-                "La carpa entera contuvo el aliento; la historia encajaba por fin.",
-                "Entre olor a serrín y pintura vieja, la verdad se impuso.",
-            ]
-            cierre = [
-                "No hubo gritos; solo un asentir cansado. Había terminado.",
-                "Al verse acorralado, dejó caer la máscara. El circo volvió a respirar.",
-                "Una última mirada al espejo roto… y la confesión llegó como un suspiro.",
-            ]
-            pivot = [
-                "Lo esencial no fue el ruido, sino {ev} y cómo te guió hasta el {lugar}.",
-                "Seguiste el hilo correcto: {ev}. Nada más hacía sentido.",
-                "Cada detalle te condujo al mismo punto: {ev}.",
-            ]
-            oficio = f" Su acto dependía de {role_hint}." if role_hint else ""
-            ev_txt = fmt_evs().format(ev="—", lugar=lugar)  # placeholder
-            ev_txt = fmt_evs().replace("—", "")
-
-            return (
-                f"{rnd.choice(entradas)} {rnd.choice(pivot).format(ev=ev_txt, lugar=lugar)} "
-                f"{killer} ya no pudo sostener la coartada.{oficio} "
-                f"{rnd.choice(cierre)}"
-            )
-
-        # Acusaste a alguien inocente (pero es un sospechoso)
-        if accused in suspects and accused != killer:
-            entradas = [
-                "El nombre cayó como un mazo sobre la carpa en silencio.",
-                "Se oyó un murmullo: la acusación estaba hecha.",
-                "Las luces temblaron y por un instante pareció verdad.",
-            ]
-            contragolpe = [
-                "Pero las piezas no terminaban de encajar.",
-                "Aun así, algo chirrió: una sombra que no paraba de moverse.",
-                "Hubo un detalle que quedó sin aire.",
-            ]
-            cierre = [
-                "Cuando todo se disipó, {killer} ya no estaba: se había escurrido hacia la noche.",
-                "{killer} dejó el maquillaje en un balde y se fue sin mirar atrás.",
-                "Alguien rió lejos. Luego, silencio. Y {killer} había desaparecido.",
-            ]
-            ev_txt = fmt_evs()
-            return (
-                f"{rnd.choice(entradas)} Sin embargo, {rnd.choice(contragolpe)} "
-                f"Te aferraste a la versión equivocada y la pista real —{ev_txt}— apuntaba a otra parte. "
-                f"El asesino real era {killer}. {rnd.choice(cierre).format(killer=killer)}"
-            )
-
-        # Acusación inválida (no es sospechoso)
-        entradas = [
-            "El señalamiento fue confuso, como un truco mal ensayado.",
-            "Hubo dudas desde el primer segundo: nadie siguió esa línea.",
-            "El aire se cortó, pero no por la razón correcta.",
-        ]
-        cierre = [
-            "La carpa volvió a encenderse, y con ella, la rutina del olvido.",
-            "Los focos giraron hacia otro número; la verdad quedó en sombras.",
-            "Quedó un espejo roto, un olor a solvente y la sensación de haber mirado al lugar equivocado.",
-        ]
-        ev_txt = fmt_evs()
-        return (
-            f"{rnd.choice(entradas)} Te faltó un pliegue más: {ev_txt}. "
-            f"El asesino real era {killer}. {rnd.choice(cierre)}"
+        prompt = PromptBuilder.build_dialog_prompt(
+            character=character,
+            question=question,
+            intent=intent,
+            policy=policy,
+            must_include_clue=must_include_clue,
+            selected_payload=payload,
+            game_state=game_state,
+            quoted=quoted,
+            target_person=target_person
         )
+
+        raw = self._llm_generate(prompt)
+        if not raw:
+            raw, meta = self._fallback_line(
+                name=name, intent=intent, policy=policy, payload=payload,
+                target_person=target_person, rel_score=rel_score
+            )
+            spoken = raw.split("\n", 1)[-1] if "\n" in raw else raw
+        else:
+            spoken, meta = self._parse_meta(raw)
+
+        self._publish_memory_flags(game_state, name, intent, meta.get("payload",""), bool(meta.get("truthful")), bool(meta.get("evasive")))
+
+        final = f"[{name}] ({intent}) {spoken}"
+        return (final, meta) if return_meta else final
+
+    def generate_ending(self, game_state, accused: str, characters: Dict[str, Any]) -> str:
+        prompt = PromptBuilder.build_ending_prompt(game_state, accused, characters)
+        raw = self._llm_generate(prompt)
+        if raw:
+            return raw.strip()
+        killer = game_state.killer
+        ev = list(dict.fromkeys(game_state.evidence_revealed))[:3]
+        ev_txt = ", ".join(ev) if ev else "casi sin pruebas claras"
+        if accused == killer:
+            return f"Cuando bajaron las luces, las piezas encajaron. {ev_txt} marcó el camino. {killer} dejó caer su máscara, y la carpa exhaló."
+        elif accused in game_state.suspects:
+            return f"El nombre pronunciado no era el correcto; {killer} se escurrió entre sombras. Quedó el rastro de {ev_txt} y la certeza tardía."
+        else:
+            return f"La acusación se diluyó en ruido. El verdadero asesino, {killer}, siguió su rutina. {ev_txt} no alcanzó para cerrar."
