@@ -4,6 +4,8 @@ import json
 import re
 from typing import Dict, Any, Optional, Tuple
 
+from gameplay.personalities import PersonalityProfile, get_personality_profile
+
 from .guardrails import is_offtopic, enforce_focus, classify_intent
 
 
@@ -109,6 +111,50 @@ Decisión: {policy}
 # =====================================================
 # 🎭 AIModelAdapter — lógica principal de interacción
 # =====================================================
+DEFAULT_RESPONSES = {
+    "GENERAL": {
+        "truth": "Me duele lo ocurrido y quiero cooperar.",
+        "lie": "No sé nada del tema; estás perdiendo el tiempo conmigo.",
+        "hedge": "No estoy seguro de que deba hablar de eso.",
+    },
+    "COARTADA": {
+        "truth": "Estaba concentrado en mi propio acto cuando todo ocurrió.",
+        "lie": "Me había ido lejos de la carpa; nadie puede decir lo contrario.",
+        "hedge": "Creí estar en mi rutina, pero todo pasó tan rápido que dudo.",
+    },
+    "PRUEBAS": {
+        "truth": "Vi detalles raros cerca del camerino que podrían ayudarte.",
+        "lie": "No vi ninguna pista; alguien inventa esos rumores.",
+        "hedge": "Quizá había algo, aunque podría estar confundido.",
+    },
+    "OBJETO": {
+        "truth": "Había un objeto fuera de lugar entre la utilería.",
+        "lie": "No hubo ningún objeto extraño, seguro es imaginación.",
+        "hedge": "Puede que hubiera algo, pero no pondría las manos al fuego.",
+    },
+    "LUGAR": {
+        "truth": "El alboroto venía desde la carpa principal.",
+        "lie": "No hubo movimiento en la carpa; todo estaba tranquilo.",
+        "hedge": "Tal vez fue por los vagones, aunque no lo juraría.",
+    },
+    "MÓVIL": {
+        "truth": "Había tensiones y motivos de sobra para lastimar a la víctima.",
+        "lie": "Nadie tenía motivos; esto fue un accidente.",
+        "hedge": "Tal vez había resentimientos, pero no sé hasta qué punto.",
+    },
+    "RELACIONES": {
+        "truth": "La convivencia estaba áspera entre algunos de nosotros.",
+        "lie": "Todos nos llevábamos de maravilla; no había peleas.",
+        "hedge": "Las cosas eran complicadas, aunque prefiero no señalar.",
+    },
+    "RUMOR": {
+        "truth": "Se escuchaban rumores inquietantes sobre el caso.",
+        "lie": "No corría ningún rumor, eso es pura habladuría.",
+        "hedge": "Oí algo, pero podría ser un chisme sin sentido.",
+    },
+}
+
+
 class AIModelAdapter:
     """
     Controlador de generación de respuestas usando un modelo HF o fallback local.
@@ -145,6 +191,138 @@ class AIModelAdapter:
             return "HEDGE"
         else:
             return "LIE"
+
+    def _get_personality(self, character: Dict[str, Any]) -> PersonalityProfile:
+        profile = character.get("personality_profile")
+        if isinstance(profile, PersonalityProfile):
+            return profile
+        return get_personality_profile(character.get("personality_key"))
+
+    def _intent_defaults(self, intent: str) -> Dict[str, str]:
+        return DEFAULT_RESPONSES.get(intent, DEFAULT_RESPONSES["GENERAL"])
+
+    def _choose_fact(self, knowledge: Dict[str, Any], intent: str) -> Optional[str]:
+        if not knowledge:
+            return None
+
+        upper = (intent or "").upper()
+        bucket = knowledge.get(upper)
+        if isinstance(bucket, list) and bucket:
+            return self.rnd.choice(bucket)
+
+        # Intent general o sin coincidencia: probar con hechos relevantes
+        for key in ("PRUEBAS", "COARTADA", "RELACIONES", "RUMOR"):
+            bucket = knowledge.get(key)
+            if isinstance(bucket, list) and bucket:
+                return self.rnd.choice(bucket)
+        return None
+
+    def _negate_fact(self, fact: str) -> str:
+        text = (fact or "").strip()
+        lower = text.lower()
+        if lower.startswith("estaba "):
+            return "No estaba " + text[7:] + "; me fui a otro sector del circo"
+        if lower.startswith("estuve "):
+            return "No estuve " + text[7:] + "; tienes información equivocada"
+        if lower.startswith("vi "):
+            return "No vi " + text[3:] + "; quizá otro se confundió"
+        if lower.startswith("vimos "):
+            return "No vimos nada de eso; alguien exagera"
+        if lower.startswith("noté ") or lower.startswith("note "):
+            return "No noté nada parecido; esa historia está inflada"
+        if lower.startswith("escuché ") or lower.startswith("escuche "):
+            return "No escuché nada así; alguien inventa ruidos"
+        if lower.startswith("dije ") or lower.startswith("dice "):
+            return "No dije nada semejante; están tergiversando mis palabras"
+        return "No fue así; están confundiendo los hechos"
+
+    def _lowercase_first(self, text: str) -> str:
+        text = text.strip()
+        if not text:
+            return text
+        return text[0].lower() + text[1:]
+
+    def _stylize_dialogue(
+        self,
+        base: str,
+        profile: PersonalityProfile,
+        mode: str,
+    ) -> str:
+        clause = (base or "").strip()
+        if not clause:
+            return ""
+
+        clause = clause.rstrip(".!? ")
+        intros = getattr(profile, f"{mode}_intros", []) or []
+        fillers = getattr(profile, f"{mode}_fillers", []) or []
+        intro = self.rnd.choice(intros) if intros else ""
+        filler = self.rnd.choice(fillers) if fillers else ""
+
+        sentences = []
+        if intro:
+            intro_clause = intro.strip().rstrip(".!?")
+            base_clause = self._lowercase_first(clause)
+            first = f"{intro_clause}, {base_clause}."
+        else:
+            first = f"{clause}."
+        sentences.append(self._tidy_sentence(first))
+
+        if filler:
+            filler_clause = filler.strip().rstrip(".!?")
+            sentences.append(self._tidy_sentence(f"{filler_clause}."))
+
+        return " ".join(sentences).strip()
+
+    def _tidy_sentence(self, sentence: str) -> str:
+        s = sentence.strip()
+        if not s:
+            return s
+        return s[0].upper() + s[1:]
+
+    def _compose_truth(
+        self,
+        character: Dict[str, Any],
+        intent: str,
+        knowledge: Dict[str, Any],
+        profile: PersonalityProfile,
+    ) -> Tuple[str, str]:
+        fact = self._choose_fact(knowledge, intent)
+        if fact:
+            base = fact
+            payload = fact
+        else:
+            base = self._intent_defaults(intent).get("truth", "")
+            payload = ""
+        spoken = self._stylize_dialogue(base, profile, "truth")
+        return spoken, payload
+
+    def _compose_lie(
+        self,
+        character: Dict[str, Any],
+        intent: str,
+        knowledge: Dict[str, Any],
+        profile: PersonalityProfile,
+    ) -> str:
+        fact = self._choose_fact(knowledge, intent)
+        if fact:
+            base = self._negate_fact(fact)
+        else:
+            base = self._intent_defaults(intent).get("lie", "")
+        return self._stylize_dialogue(base, profile, "lie")
+
+    def _compose_hedge(
+        self,
+        character: Dict[str, Any],
+        intent: str,
+        knowledge: Dict[str, Any],
+        profile: PersonalityProfile,
+    ) -> str:
+        fact = self._choose_fact(knowledge, intent)
+        if fact:
+            base = f"Quizá {self._lowercase_first(fact)}"
+        else:
+            base = self._intent_defaults(intent).get("hedge", "")
+        return self._stylize_dialogue(base, profile, "hedge")
 
     def _parse_meta(self, text: str) -> Tuple[str, Dict[str, Any]]:
         """Extrae el JSON de <META> y la línea de diálogo; limpia placeholders y asegura diálogo."""
@@ -244,15 +422,30 @@ class AIModelAdapter:
         # ----------------------------
         # Fallback local (sin modelo)
         # ----------------------------
-        sample_replies = {
-            "COARTADA": "Estaba cerca del escenario, pero no vi nada extraño.",
-            "PRUEBAS": "Había algo raro cerca de los camerinos, quizá te ayude.",
-            "MÓVIL": "No entiendo quién querría dañar a Ñopin.",
-            "RELACIONES": "Últimamente no nos hablábamos mucho, la tensión era evidente.",
-            "GENERAL": "No estoy seguro de cómo responder eso.",
+        knowledge = character.get("knowledge") or {}
+        profile = self._get_personality(character)
+
+        if policy == "TRUTH":
+            spoken, payload = self._compose_truth(character, intent, knowledge, profile)
+            truthful = True
+        elif policy == "LIE":
+            spoken = self._compose_lie(character, intent, knowledge, profile)
+            payload = ""
+            truthful = False
+        else:  # HEDGE
+            spoken = self._compose_hedge(character, intent, knowledge, profile)
+            payload = ""
+            truthful = False
+
+        if not spoken.strip():
+            spoken = self._fallback_spoken_for_intent(intent)
+        meta = {
+            "intent": intent,
+            "truthful": truthful,
+            "payload": payload,
+            "evasive": policy != "TRUTH",
+            "said_before": False,
         }
-        spoken = sample_replies.get(intent, "No sabría decirte.")
-        meta = {"intent": intent, "truthful": True, "payload": spoken, "evasive": False, "said_before": False}
         return (f"[{name}] ({intent}) {spoken}", meta) if return_meta else f"[{name}] ({intent}) {spoken}"
 
     # ==================================================
