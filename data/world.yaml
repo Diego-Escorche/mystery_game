@@ -1,0 +1,12 @@
+world:
+  circus_name: "Circo de la Medianoche"
+  places:
+    - "Camarote de Ñopin"
+    - "Carpa principal"
+    - "Carpa de Madame"
+    - "Corral de fieras"
+    - "Zona de vestuarios"
+  ambience:
+    smells: ["sándalo", "jazmín", "cera", "paja húmeda"]
+    sounds:
+      ["lonas golpeadas por el viento", "cadena de jaulas", "risas lejanas"]

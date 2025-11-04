@@ -1,2 +1,34 @@
+# Entorno / Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.build/
+dist/
+build/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+coverage.xml
+htmlcov/
+.coverage
+.tox/
+.cache/
 
-/.venv
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# IDE / Editores
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Variables locales
+.env

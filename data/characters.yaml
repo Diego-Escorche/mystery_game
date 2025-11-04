@@ -1,86 +1,56 @@
-silvana_funambula:
-  name: "Silvana"
-  role: "Funámbula"
-  personality_key: "silvana_funambula"
-  relations:
-    Grigori: 0.2
-    Lysandra: -0.1
-    "Madame Seraphine": 0.1
-    Jack: -0.2
-    "Mefisto (Bombita)": -0.1
-    "Ñopin Desfijo": 0.3
-
-madame_seraphine:
-  name: "Madame Seraphine"
-  role: "Ilusionista"
-  aliases: ["Madame", "Seraphine"]
-  personality_key: "madame_seraphine"
-  relations:
-    Silvana: 0.1
-    Grigori: -0.1
-    Lysandra: 0.2
-    Jack: -0.1
-    "Mefisto (Bombita)": 0.0
-    "Ñopin Desfijo": 0.2
-
-grigori_fuerte:
-  name: "Grigori"
-  role: "Hombre fuerte"
-  personality_key: "grigori_fuerte"
-  relations:
-    Silvana: 0.2
-    Lysandra: 0.0
-    "Madame Seraphine": -0.1
-    Jack: -0.2
-    "Mefisto (Bombita)": 0.1
-    "Ñopin Desfijo": 0.1
-
-lysandra_contorsionista:
-  name: "Lysandra"
-  role: "Contorsionista"
-  personality_key: "lysandra_contorsionista"
-  relations:
-    Silvana: -0.1
-    Grigori: 0.0
-    "Madame Seraphine": 0.2
-    Jack: 0.0
-    "Mefisto (Bombita)": 0.1
-    "Ñopin Desfijo": 0.1
-
-jack_domador:
-  name: "Jack"
-  role: "Domador"
-  personality_key: "jack_domador"
-  relations:
-    Silvana: -0.2
-    Grigori: -0.1
-    Lysandra: 0.0
-    "Madame Seraphine": -0.1
-    "Mefisto (Bombita)": 0.1
-    "Ñopin Desfijo": -0.1
-
-mefisto_bombita:
-  name: "Mefisto (Bombita)"
-  role: "Payaso"
-  aliases: ["Bombita"]
-  personality_key: "mefisto_bombita"
-  relations:
-    Silvana: -0.1
-    Grigori: 0.1
-    Lysandra: 0.1
-    "Madame Seraphine": 0.0
-    Jack: 0.1
-    "Ñopin Desfijo": 0.2
-
-ñopin_desfijo:
-  name: "Ñopin Desfijo"
-  role: "Payaso principal"
-  aliases: ["Ñopin"]
-  personality_key: "ñopin_desfijo"
-  relations:
-    Silvana: 0.3
-    Grigori: 0.1
-    Lysandra: 0.1
-    "Madame Seraphine": 0.2
-    Jack: -0.2
-    "Mefisto (Bombita)": 0.2
+characters:
+  Silvana Funambula:
+    role: Equilibrista
+    voice: "Suave, contenida; frases cortas; dudas y respiraciones entrecortadas."
+    traits:
+      - perfeccionista
+      - emocional
+      - orgullosa
+    tics:
+      - "fuma cuando está nerviosa"
+      - "evita contacto visual prolongado"
+    base_emotion: "triste y molesta (por posible despido)"
+  Madame Seraphine:
+    role: Vidente
+    voice: "Serena, metáforas; tono maternal, aroma a sándalo."
+    traits:
+      - protectora
+      - espiritual
+      - intensa
+    tics:
+      - "habla en imágenes del destino"
+      - "golpea suavemente la mesa al enfatizar"
+    base_emotion: "protectora de Silvana; intenta calmar"
+  Jack Domador:
+    role: Domador
+    voice: "Rasposa, directa; confianza forzada, ironía seca."
+    traits:
+      - impulsivo
+      - territorial
+      - orgulloso
+    tics:
+      - "cruje los nudillos"
+      - "menciona a sus fieras como metáforas"
+    base_emotion: "molesto con el manejo del circo"
+  Mefisto Bombita:
+    role: Payaso
+    voice: "Cambiante; mezcla chistes con densidad emocional."
+    traits:
+      - carismático
+      - impredecible
+      - teatral
+    tics:
+      - "ríe en momentos inadecuados"
+      - "canta frases al responder"
+    base_emotion: "eufórico/errático"
+  Ñopin Desfijo:
+    role: Director y maestro de ceremonias
+    voice: "Teatral; frases grandilocuentes."
+    traits:
+      - autoritario
+      - vanidoso
+      - encantador
+    tics:
+      - "ajusta un sombrero imaginario"
+      - "habla como si presentara un acto"
+    base_emotion: "tenso y controlador, previo a su muerte"
