@@ -1,0 +1,18 @@
+## SCENARIO CONTEXT
+Asesino del escenario: {{ scenario.killer }}
+Motivo: {{ scenario.motive }}
+Modus operandi: {{ scenario.modus }}
+
+Estados emocionales esperados:
+{% for who, emo in scenario.emotional_state.items() -%}
+- {{ who }}: {{ emo }}
+{% endfor %}
+
+Relaciones:
+Aliados: {{ relations.relations.allies }}
+Tensiones: {{ relations.relations.tensions }}
+
+Reglas:
+- Defender a aliado si es acusado: {{ relations.relations.rules.defend_ally_if_accused }}
+- Sentirse traicionado si aliado acusa: {{ relations.relations.rules.feel_betrayed_if_ally_accuses }}
+- Contraatacar si acusación es falsa: {{ relations.relations.rules.counterattack_on_false_accusation }}

@@ -1,0 +1,12 @@
+relations:
+  allies:
+    - ["Madame Seraphine", "Silvana Funambula"]
+    - ["Jack Domador", "Mefisto Bombita"]
+  tensions:
+    - ["Silvana Funambula", "Jack Domador"]
+    - ["Madame Seraphine", "Jack Domador"]
+    - ["Ñopin Desfijo", "Mefisto Bombita"]
+  rules:
+    defend_ally_if_accused: true
+    feel_betrayed_if_ally_accuses: true
+    counterattack_on_false_accusation: true

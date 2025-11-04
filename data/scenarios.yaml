@@ -1,0 +1,101 @@
+scenarios:
+  S1_SilvanaAsesina:
+    killer: "Silvana Funambula"
+    motive: "Desesperación por despido; humillación en discusión final."
+    modus: "Ataque impulsivo y violento en el camarote."
+    precrime:
+      Silvana Funambula: "Se separa de Madame con la excusa de caminar; va al camarote."
+      Madame Seraphine: "Lectura de cartas; había consolado a Silvana."
+      Jack Domador: "Tras las fieras, rutina de cierre."
+      Mefisto Bombita: "Merodea, habla con todos, arregla vestuario."
+    emotional_state:
+      Silvana Funambula: "culpa contenida, temblores"
+      Madame Seraphine: "sospecha y protección"
+      Jack Domador: "frialdad, distancia"
+      Mefisto Bombita: "bromas incómodas"
+    clues:
+      - "Mancha mínima de sangre en su manga izquierda."
+      - "Aroma a jazmín (su perfume) en el camarote."
+      - "Cuerda fina rota (de equipo de equilibrio) en la entrada."
+      - "Mefisto la vio merodeando sola."
+      - "Carta de despido arrugada bajo el cuerpo."
+  S2_SeraphineAsesina:
+    killer: "Madame Seraphine"
+    motive: "Proteger a Silvana; discusión que se sale de control."
+    modus: "Golpe impulsivo con su esfera/bola de cristal."
+    precrime:
+      Silvana Funambula: "Lágrimas en carpa de ensayo."
+      Madame Seraphine: "Va al camarote a negociar."
+      Jack Domador: "Ronda cercana a su zona."
+      Mefisto Bombita: "Dice haber visto una silueta con velo."
+    emotional_state:
+      Madame Seraphine: "nerviosismo bajo calma aparente"
+      Silvana Funambula: "confundida, dependiente"
+      Jack Domador: "desconfiado"
+      Mefisto Bombita: "juguetón, supersticioso"
+    clues:
+      - "Fragmentos de vidrio con olor a incienso."
+      - "Testigo vio silueta con velo corriendo."
+      - "Aroma a sándalo en alfombra."
+      - "Gotas de cera morada junto a ventana."
+      - "Carta del tarot con mancha rojiza."
+  S3_JackAsesino:
+    killer: "Jack Domador"
+    motive: "Traición administrativa de Ñopin; pérdida de control."
+    modus: "Envenenamiento (toxina de serpiente) en el vino."
+    precrime:
+      Jack Domador: "Manipula veneno y prepara copa."
+      Ñopin Desfijo: "Bebe tras función."
+      Silvana Funambula: "Evita a Jack."
+      Mefisto Bombita: "Escuchó discusión Ñopin-Jack horas antes."
+    emotional_state:
+      Jack Domador: "calmo y técnico"
+      Silvana Funambula: "tensa ante Jack"
+      Madame Seraphine: "percibe mala energía"
+      Mefisto Bombita: "enigmático"
+    clues:
+      - "Toxina animal en la copa."
+      - "Frasco vacío detrás del corral."
+      - "Huellas de botas embarradas coinciden con Jack."
+      - "Recibo de compra de antídoto días antes."
+      - "Cita: “nunca debí confiar en ti” (testimonio de Mefisto)."
+  S4_MefistoAsesino:
+    killer: "Mefisto Bombita"
+    motive: "Impulso caótico; sin motivo claro."
+    modus: "Golpe con lámpara durante una ‘broma’."
+    precrime:
+      Mefisto Bombita: "Bromea en camerinos; entra y sale."
+      Ñopin Desfijo: "Irritado por interrupciones."
+      Jack Domador: "Le advierte que ‘no moleste’."
+      Madame Seraphine: "Nota energía caótica."
+    emotional_state:
+      Mefisto Bombita: "euforia y oscuridad mezcladas"
+      Silvana Funambula: "shock"
+      Jack Domador: "furia abierta"
+      Madame Seraphine: "temor"
+    clues:
+      - "Pintura blanca en manija del camarote."
+      - "Lágrima de payaso dibujada con sangre en espejo."
+      - "Retazo rojo de disfraz entre cortinas."
+      - "Corte pequeño en brazo de Mefisto."
+      - "Mancha oscura persistente en maquillaje."
+  S5_NyopinSuicidio:
+    killer: "Ñopin Desfijo"
+    motive: "Desesperación/control post mortem; posible incriminación ajena."
+    modus: "Suicidio teatral; prepara pistas falsas."
+    precrime:
+      Ñopin Desfijo: "Provoca a varios; escribe notas ambiguas."
+      Jack Domador: "Último cruce tenso."
+      Silvana Funambula: "Recibe amenaza de despido."
+      Madame Seraphine: "Percibe ‘final de ciclo’."
+    emotional_state:
+      Silvana Funambula: "culpa difusa"
+      Jack Domador: "confuso y suspicaz"
+      Madame Seraphine: "dolida y fatalista"
+      Mefisto Bombita: "humor negro"
+    clues:
+      - "Carta teatral firmada por Ñopin."
+      - "Llave del camarote en su bolsillo (puerta cerrada por dentro)."
+      - "Vaso con somníferos."
+      - "Cuaderno acusando indirectamente a Silvana y Jack."
+      - "Marcas de cinta en muñeca (autoataduras teatrales)."

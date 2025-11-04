@@ -1,33 +1,26 @@
-# Mystery Game — Circo en el Desierto (CLI)
+# Mystery Game – Circo de la Medianoche (CLI)
 
-Un juego de misterio en **3 fases** (Inicio → Desarrollo → Conclusión) ambientado en un circo en medio del desierto.
-Incluye **sospechoso aleatorio** (incluso Ñopin desfijo), **interrogatorios con memoria social**, **evidencias reales y ambiguas**,
-y un **modelo de diálogo** con guardrails para evitar desvíos del caso.
+## Ejecutar
 
-### 🧠 Memoria por personaje
+```bash
+python -m mystery_game.src.main
 
-Cada sospechoso conserva:
+Flujo
+Escribe: interrogar Silvana o interrogar Madame (alias válidos).
 
-- Q/A recientes (para coherencia tipo “ya lo dije…”),
-- hechos declarados por intent,
-- quién lo acusó/apoyó (y a quién acusó/apoyó),
-- conteo de evasivas.
+Preguntas libres tras seleccionar un personaje.
 
-Esto modula la presión y la probabilidad de mentir/decir verdad, y se incluye en el prompt del LLM.
+El stub del modelo (SmolLM3-3B) responde usando el prompt generado.
 
-## ⚙️ Instalación rápida (con SmolLM3-3B)
+Datos editables
+data/aliases.json: alias → nombre canónico.
 
-1. Python 3.10+ y (opcional) venv
-2. Instala dependencias:
-   ```bash
-   pip install -r requirements.txt
-   ```
+data/characters.yaml: personalidad base.
 
-## 🚀 Cómo ejecutar
+data/scenarios.yaml: 5 escenarios con pistas, coartadas y estados emocionales.
 
-1. Asegúrate de tener Python 3.10+.
-2. (Opcional) Crea un entorno virtual.
-3. Ejecuta desde la carpeta del proyecto:
-   ```bash
-   python main.py
-   ```
+data/relationships.yaml: afinidades/tensiones y reglas de reacción.
+
+data/world.yaml: lore del Circo de la Medianoche.
+
+```
