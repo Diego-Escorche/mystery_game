@@ -36,7 +36,7 @@ backFromVictoryBtn.addEventListener('click', goToStart);
 backFromDefeatBtn.addEventListener('click', goToStart);
 restartFromVictoryBtn.addEventListener('click', startGame);
 restartFromDefeatBtn.addEventListener('click', startGame);
-
+let killer
 suspects = [{"name":"Jack Domador", "role": 'Domador'},
                 {"name":"Madame Seraphine", "role": 'Vidente'},
                 {"name":"Mefisto Bombita", "role": 'Payaso'},
@@ -51,6 +51,8 @@ ws.onmessage = (event)=> {
     
     console.log(suspects)
     characters = data.characters
+    killer = data.killer
+    console.log(killer)
   }else if (data.type == "answer"){
     addSuspectMessage(data.message)
   }
@@ -183,10 +185,27 @@ function addSystemMessage(text) {
 // Resolver caso
 function solveCase() {
     const suspectNames = suspects.map(s => s.name);
-    const suspectList = suspectNames.map((name, i) => `${i + 1}. ${name}`).join('\n');
+    const suspectList = suspectNames.map((name, i) => `\n${i + 1}. ${name}`).join('\n');
     
-    const choice = prompt(`¿QUIÉN ES EL ASESINO?\n\nEscribe el número del sospechoso:\n\n${suspectList}`);
-    
+    Swal.fire({
+            title: "¿Quien es el asesino?",
+            icon:"question",
+            text:suspectList,
+            theme: 'dark',
+            input: "text",
+            inputAttributes: {autocapitalize: "off"},
+            showCancelButton: true,
+            confirmButtonText: "Resolver caso",
+            showLoaderOnConfirm: true,
+            customClass: {
+              popup: 'sweetalert',
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+            if (result.isConfirmed) {
+                choice = result.value
+            }
+          });   
     if (choice === null) return; // Usuario canceló
     
     const choiceNum = parseInt(choice);
@@ -198,7 +217,7 @@ function solveCase() {
     
     const chosenSuspect = suspects[choiceNum - 1];
     
-    if (chosenSuspect.isKiller) {
+    if (chosenSuspect.name == killer) {
         // Victoria
         hideAllScreens();
         victoryScreen.classList.add('active');

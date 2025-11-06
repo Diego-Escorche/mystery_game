@@ -120,7 +120,12 @@ async def websocket_endpoint(websocket: WebSocket):
         + common_context
     )
     await websocket.send_json(
-        {"type": "intro", "message": intro_text, "characters": state.characters}
+        {
+            "type": "intro",
+            "message": intro_text,
+            "characters": state.characters,
+            "killer": state.get_scenario().get("killer"),
+        }
     )
 
     try:

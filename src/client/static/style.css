@@ -71,6 +71,13 @@ body::before {
     background: rgba(139, 0, 0, 0.6);
     box-shadow: 0 0 20px rgba(139, 0, 0, 0.8);
 }
+.sweetalert .swal2-question {
+  color: #8b0000 !important;
+  border-color:#8d0000 !important;
+}
+.sweetalert .swal2-popup{
+  color: #8d0000 !important;
+}
 
 /* Pantalla de inicio */
 .pixel-container {
