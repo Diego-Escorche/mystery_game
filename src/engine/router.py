@@ -145,17 +145,18 @@ def run_cli():
         if cmd_lower in ("siguiente", "final"):
             state.in_final_stage = True
             print(FINAL_PROMPT)
+            # Mostrar recopilación de pistas antes del final
+            found = state.revealed_clues.get(state.active_scenario, [])
+            if found:
+                print(Fore.CYAN + "\nPistas recopiladas durante la investigación:")
+                for c in found:
+                    print(Fore.CYAN + f" - {c}")
+            else:
+                print(Fore.CYAN + "\nNo encontraste ninguna pista clara...")
             continue
 
         # si estamos en etapa final, sólo aceptamos acusaciones
         if state.in_final_stage and not cmd_lower.startswith("acusar"):
-            found = state.revealed_clues.get(state.active_scenario, [])
-            print(Fore.CYAN + "\nPistas recopiladas hasta ahora:")
-            if found:
-                for c in found:
-                    print(Fore.CYAN + f" - {c}")
-            else:
-                print(Fore.CYAN + "No has encontrado ninguna pista concluyente todavía.")
             print(Fore.MAGENTA + "\nCuando estés listo, acusa a alguien con: 'acusar <nombre>'.")
             continue
 
@@ -167,14 +168,6 @@ def run_cli():
                     print(Fore.RED + "No reconozco ese nombre. Intenta: Silvana, Madame, Jack, Mefisto, Ñopin.")
                     continue
                 actual_killer = state.get_scenario().get("killer")
-                # Mostrar recopilación de pistas antes del final
-                found = state.revealed_clues.get(state.active_scenario, [])
-                if found:
-                    print(Fore.CYAN + "\nPistas recopiladas durante la investigación:")
-                    for c in found:
-                        print(Fore.CYAN + f" - {c}")
-                else:
-                    print(Fore.CYAN + "\nNo encontraste ninguna pista clara...")
 
                 ending = engine.model.generate_ending(actual_killer, accused)
                 print("\n" + Style.BRIGHT + ending)
