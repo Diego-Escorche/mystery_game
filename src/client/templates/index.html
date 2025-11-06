@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" type="image/png">
+    <title>Mentiras Programadas - Caso Ñonpin Desfijo</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+
+<body>
+    <!-- Pantalla de inicio -->
+    <div id="start-screen" class="screen active">
+        <div class="pixel-container">
+            <h1 class="pixel-title">MENTIRAS PROGRAMADAS</h1>
+            <h2 class="pixel-subtitle">☠️ CASO ÑÓNPIN DESFIJO ☠️</h2>
+            <div class="pixel-box">
+                <p class="pixel-text">UN PAYASO HA SIDO ASESINADO...</p>
+                <p class="pixel-text">6 SOSPECHOSOS AGUARDAN EN LAS SOMBRAS...</p>
+                <p class="pixel-text">¿QUIÉN OCULTA LA VERDAD SANGRIENTA?</p>
+                <p class="pixel-text-small" style="margin-top: 20px;">La IA conoce la verdad, y vos?</p>
+            </div>
+            <button id="start-btn" class="pixel-button">🔍 INICIAR INVESTIGACIÓN 🔍</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de juego -->
+    <div id="game-screen" class="screen">
+        <button class="back-button" id="back-to-start">◄ VOLVER AL INICIO</button>
+        <div class="game-container">
+            <!-- Panel superior con info del sospechoso -->
+            <div class="suspect-panel">
+                <div class="suspect-info">
+                    <div class="suspect-avatar" id="suspect-avatar">🎪</div>
+                    <div class="suspect-details">
+                        <h2 id="suspect-name" class="pixel-text">SOSPECHOSO #1</h2>
+                        <p id="suspect-role" class="pixel-text-small">Rol desconocido</p>
+                    </div>
+                </div>
+                <div class="suspect-counter">
+                    <span id="suspect-number" class="pixel-text">1/6</span>
+                </div>
+            </div>
+
+            <!-- Área de chat -->
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages"></div>
+            </div>
+
+            <!-- Input de preguntas -->
+            <div class="input-container">
+                <input type="text" id="question-input" class="pixel-input" placeholder="Escribe tu pregunta al sospechoso..." maxlength="300">
+                <button id="send-btn" class="pixel-button-small">ENVIAR</button>
+            </div>
+
+            <!-- Navegación entre sospechosos -->
+            <div class="navigation">
+                <button id="prev-btn" class="pixel-button-nav" disabled>◄ ANTERIOR</button>
+                <button id="solve-btn" class="pixel-button-nav">🔍 RESOLVER CASO</button>
+                <button id="next-btn" class="pixel-button-nav">SIGUIENTE ►</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de victoria -->
+    <div id="victory-screen" class="screen">
+        <button class="back-button" id="back-from-victory">◄ VOLVER AL INICIO</button>
+        <div class="end-container">
+            <h1 class="end-title victory">¡CASO RESUELTO!</h1>
+            <div class="skull-decoration">💀</div>
+            <div class="end-message">
+                <p class="pixel-text">HAS DESCUBIERTO AL ASESINO</p>
+                <p class="pixel-text" style="margin-top: 20px;">La verdad ha salido a la luz...</p>
+                <p class="pixel-text">El líder de la secta ha sido desenmascarado.</p>
+                <p class="pixel-text">Ñonpin Desfijo puede descansar en paz.</p>
+            </div>
+            <div class="blood-drip">🩸</div>
+            <div style="margin-top: 40px;">
+                <p class="pixel-text-small">JUSTICIA SERVIDA</p>
+                <p class="pixel-text-small">El circo del terror ha caído</p>
+            </div>
+            <button id="restart-from-victory" class="pixel-button" style="margin-top: 30px;">🔄 NUEVA INVESTIGACIÓN</button>
+        </div>
+    </div>
+
+    <!-- Pantalla de derrota -->
+    <div id="defeat-screen" class="screen">
+        <button class="back-button" id="back-from-defeat">◄ VOLVER AL INICIO</button>
+        <div class="end-container">
+            <h1 class="end-title defeat">HAS FALLADO</h1>
+            <div class="skull-decoration">☠️</div>
+            <div class="blood-drip">🩸</div>
+            <div class="blood-drip">🩸</div>
+            <div class="blood-drip">🩸</div>
+            <div class="end-message">
+                <p class="pixel-text">ACUSASTE AL INOCENTE...</p>
+                <p class="pixel-text" style="margin-top: 20px;">El verdadero asesino sabe que lo buscas.</p>
+                <p class="pixel-text">Ahora él viene por ti...</p>
+                <p class="pixel-text">En la oscuridad del circo, nadie puede oírte gritar.</p>
+            </div>
+            <div style="margin-top: 30px;">
+                <div class="blood-drip">🔪</div>
+                <p class="pixel-text-small" style="margin-top: 20px;">EL CIRCO NUNCA OLVIDA</p>
+                <p class="pixel-text-small">EL CIRCO NUNCA PERDONA</p>
+            </div>
+            <button id="restart-from-defeat" class="pixel-button" style="margin-top: 30px;">🔄 INTENTAR DE NUEVO</button>
+        </div>
+    </div>
+
+    <script type="module" src="{{ url_for('static', path='/script.js') }}""></script>
+</body>
+
+</html>
