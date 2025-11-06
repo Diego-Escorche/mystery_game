@@ -2,6 +2,7 @@
 let currentSuspectIndex = 0;
 let chatHistory = [];
 let suspects = [];
+let characters = [];
 
 // Elementos del DOM
 const startScreen = document.getElementById('start-screen');
@@ -35,11 +36,24 @@ backFromVictoryBtn.addEventListener('click', goToStart);
 backFromDefeatBtn.addEventListener('click', goToStart);
 restartFromVictoryBtn.addEventListener('click', startGame);
 restartFromDefeatBtn.addEventListener('click', startGame);
+
+suspects = [{"name":"Jack Domador", "role": 'Domador'},
+                {"name":"Madame Seraphine", "role": 'Vidente'},
+                {"name":"Mefisto Bombita", "role": 'Payaso'},
+                {"name":"Silvana Funambula","role": 'Equilibrista'},
+                {"name":"Ñopin Desfijo", "role": 'Director y maestro de ceremonias'}
+    ]
 // EVENTOS DEL WEB WebSocket
 //
 ws.onmessage = (event)=> {
   const data = JSON.parse(event.data)
-  suspects = data.characters
+  if (data.type == "intro") {
+    
+    console.log(suspects)
+    characters = data.characters
+  }else if (data.type == "answer"){
+    addSuspectMessage(data.message)
+  }
 
 }
 function startGame() {
@@ -65,9 +79,8 @@ function hideAllScreens() {
 // Cargar sospechoso
 function loadSuspect(index) {
     const suspect = suspects[index];
-    suspectAvatar.textContent = suspect.avatar;
-    suspectName.textContent = suspect.name;
-    suspectRole.textContent = suspect.role;
+    suspectName.textContent = suspect["name"];
+    suspectRole.textContent = suspect["role"];
     suspectNumber.textContent = `${index + 1}/${suspects.length}`;
     
     // Actualizar botones de navegación
@@ -77,10 +90,6 @@ function loadSuspect(index) {
     // Limpiar chat
     chatMessages.innerHTML = '';
     
-    // Mensaje de bienvenida del sospechoso
-    setTimeout(() => {
-        addSuspectMessage(getWelcomeMessage(suspect));
-    }, 500);
 }
 
 // Mensajes de bienvenida
@@ -103,7 +112,8 @@ function sendQuestion() {
     
     addDetectiveMessage(question);
     questionInput.value = '';
-    
+    console.log("Enviando mensaje...") 
+    ws.send(`interrogar ${suspects[currentSuspectIndex].name}`)
     ws.send(question)
     // Simular tiempo de respuesta (como si la IA estuviera pensando)
     //const thinkingTime = 1500 + Math.random() * 1500;
